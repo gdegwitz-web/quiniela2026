@@ -5,28 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Quiniela FIFA 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- Firebase Compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyDBTJ7xAkJ5Gd_6_nk6P-O3ExnwoVazqIU",
-  authDomain: "quiniela2026-52572.firebaseapp.com",
-  databaseURL: "https://quiniela2026-52572-default-rtdb.firebaseio.com",
-  projectId: "quiniela2026-52572",
-  storageBucket: "quiniela2026-52572.firebasestorage.app",
-  messagingSenderId: "348471033393",
-  appId: "1:348471033393:web:c764afba5d404d995b1f10"
-};
-try {
-  firebase.initializeApp(firebaseConfig);
-  window.DB = firebase.database();
-  console.log("✅ Firebase conectado");
-} catch(e) {
-  window.DB = null;
-  console.warn("⚠️ Firebase no disponible, usando localStorage", e.message);
-}
-</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#141824;color:#eee;font-family:Arial,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent}
@@ -327,51 +305,10 @@ function buildBracket(groups,ko){
 
 // ─── STORAGE ──────────────────────────────────────────
 const LS="q2026";
-
-// ── Load initial state from localStorage (instant, no flicker) ──
 let STATE=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
+// Migrate older saves without leagues
 if(!STATE.leagues) STATE.leagues=[];
-
-// ── Firebase: subscribe to live data ──
-let _fbRefreshTimer=null;
-if(window.DB){
-  window.DB.ref("quiniela").on("value", snap=>{
-    const val=snap.val();
-    if(val){
-      STATE.participants = val.participants ? Object.values(val.participants) : [];
-      STATE.predictions  = val.predictions  || {};
-      STATE.actuals      = val.actuals      || {};
-      STATE.leagues      = val.leagues ? Object.values(val.leagues) : [];
-      localStorage.setItem(LS, JSON.stringify(STATE));
-      // Only auto-refresh read-only pages, never during user input
-      // Use a small delay so user actions always complete first
-      clearTimeout(_fbRefreshTimer);
-      _fbRefreshTimer = setTimeout(()=>{
-        const safePages=["leaderboard","admin","league","landing"];
-        if(typeof ROUTE!=="undefined" && safePages.includes(ROUTE.page)){
-          if(typeof renderApp==="function") renderApp();
-        }
-      }, 800);
-    }
-  });
-}
-
-// ── Persist to Firebase + localStorage ──
-function persist(){
-  localStorage.setItem(LS, JSON.stringify(STATE));
-  if(window.DB){
-    const pObj={}, lObj={};
-    STATE.participants.forEach(p=>pObj[p.id]=p);
-    STATE.leagues.forEach(l=>lObj[l.id]=l);
-    window.DB.ref("quiniela").set({
-      participants: pObj,
-      predictions:  STATE.predictions,
-      actuals:      STATE.actuals,
-      leagues:      lObj
-    }).catch(e=>console.error("Firebase write:",e));
-  }
-  showFlash("✓ Guardado");
-}
+function persist(){localStorage.setItem(LS,JSON.stringify(STATE));showFlash("✓ Guardado")}
 
 let _ft;
 function showFlash(m){
@@ -784,6 +721,7 @@ function doRegister(){
   if(!qname){setErr("eq","⚠ Ponle nombre a tu quiniela");ok=false}else setErr("eq","");
   if(pwd.length<4){setErr("ep","⚠ Mínimo 4 caracteres");ok=false}else setErr("ep","");
   if(pwd!==pwd2){setErr("ep2","⚠ Las contraseñas no coinciden");ok=false}else setErr("ep2","");
+  // Check if email already registered
   if(ok&&STATE.participants.find(p=>p.email&&p.email.toLowerCase()===email.toLowerCase())){
     setErr("ee","⚠ Este correo ya tiene una quiniela registrada");ok=false;
   }
@@ -791,30 +729,12 @@ function doRegister(){
   const pid=uid();
   STATE.participants.push({id:pid,name,email:email.toLowerCase(),hidden:false});
   STATE.predictions[pid]={groups:{},ko:{},quinName:qname,pwdHash:hashPwd(pwd),submitted:false};
-  // Navigate FIRST, then persist (avoids Firebase listener overwriting navigation)
+  persist();
   SESSION.pid=pid;
   go("predict",{pid});
-  persist();
 }
 
-function doLogin(){
-  const email=val("li-email").toLowerCase();
-  const pwd=document.getElementById("li-pwd")?.value||"";
-  setErr("li-eerr","");setErr("li-perr","");
-  if(!email){setErr("li-eerr","⚠ Ingresa tu correo");return}
-  if(!pwd){setErr("li-perr","⚠ Ingresa tu contraseña");return}
-  const p=STATE.participants.find(x=>x.email&&x.email.toLowerCase()===email&&!x.hidden);
-  if(!p){setErr("li-eerr","⚠ No encontramos una quiniela con ese correo");return}
-  const pred=STATE.predictions[p.id]||{};
-  const stored=pred.pwdHash;
-  if(!stored||stored!==hashPwd(pwd)){
-    setErr("li-perr","⚠ Contraseña incorrecta");return;
-  }
-  // Navigate FIRST, then set session
-  SESSION.pid=p.id;
-  if(!pred.submitted) go("predict",{pid:p.id});
-  else go("myscore",{pid:p.id});
-}
+function pgReturning(){
   return heroHTML()+`<div class="card">
     <h2>🏆 INGRESAR A MI QUINIELA</h2>
     <p style="font-size:.78rem;color:#889;margin-bottom:.8rem;line-height:1.5">
@@ -1485,15 +1405,7 @@ function adminRemoveFromLeague(pid,lid){
   persist();
   go("admin",{tab:"participants"});
 }
-function resetAll(){
-  if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
-  if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
-  STATE={participants:[],predictions:{},actuals:{},leagues:[]};
-  localStorage.removeItem(LS);
-  if(window.DB) window.DB.ref("quiniela").remove().catch(e=>console.error(e));
-  showFlash("✓ Borrado");
-  go("landing");
-}
+function resetAll(){if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;STATE={participants:[],predictions:{},actuals:{},leagues:[]};localStorage.removeItem(LS);showFlash("✓ Borrado");go("landing")}
 
 // ── PDF GENERATION (2 pages, landscape A4) ─────────────
 function genPDF(pid){
