@@ -90,6 +90,9 @@ button:hover{opacity:.85}
 .lg-admin-panel{display:none}
 .lg-admin-panel.open{display:block}
 </style>
+<!-- Firebase (loaded async - never blocks the app) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 <div id="app"><div style="text-align:center;padding:3rem;color:#ffc800">⚽ Cargando...</div></div>
@@ -305,10 +308,61 @@ function buildBracket(groups,ko){
 
 // ─── STORAGE ──────────────────────────────────────────
 const LS="q2026";
+
+// 1. Load instantly from localStorage — app starts immediately
 let STATE=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
-// Migrate older saves without leagues
 if(!STATE.leagues) STATE.leagues=[];
-function persist(){localStorage.setItem(LS,JSON.stringify(STATE));showFlash("✓ Guardado")}
+
+// 2. Connect Firebase silently in background — never blocks anything
+(function(){
+  try {
+    firebase.initializeApp({
+      apiKey:"AIzaSyDBTJ7xAkJ5Gd_6_nk6P-O3ExnwoVazqIU",
+      databaseURL:"https://quiniela2026-52572-default-rtdb.firebaseio.com",
+      projectId:"quiniela2026-52572"
+    });
+    const db=firebase.database();
+    window._fbDB=db;
+    // Listen for remote changes — only update STATE and re-render on safe pages
+    db.ref("q2026").on("value",function(snap){
+      const val=snap.val();
+      if(!val) return;
+      const safe=["landing","leaderboard","admin","league"];
+      // Update STATE silently
+      if(val.participants) STATE.participants=Object.values(val.participants);
+      if(val.predictions)  STATE.predictions=val.predictions;
+      if(val.actuals)      STATE.actuals=val.actuals;
+      if(val.leagues)      STATE.leagues=Object.values(val.leagues);
+      if(!STATE.leagues)   STATE.leagues=[];
+      localStorage.setItem(LS,JSON.stringify(STATE));
+      // Only re-render on read-only pages, never interrupt user input
+      if(typeof ROUTE!=="undefined" && safe.includes(ROUTE.page)){
+        renderApp();
+      }
+    });
+  } catch(e){
+    window._fbDB=null;
+    console.warn("Firebase unavailable, using localStorage only");
+  }
+})();
+
+// 3. persist() — saves to localStorage instantly + Firebase in background
+function persist(){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  showFlash("✓ Guardado");
+  if(window._fbDB){
+    // Convert arrays to objects keyed by id for Firebase
+    const data={
+      participants:{},predictions:STATE.predictions,
+      actuals:STATE.actuals,leagues:{}
+    };
+    (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
+    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
+    window._fbDB.ref("q2026").set(data).catch(function(e){
+      console.warn("Firebase write failed:",e.message);
+    });
+  }
+}
 
 let _ft;
 function showFlash(m){
@@ -1415,7 +1469,14 @@ function adminRemoveFromLeague(pid,lid){
   persist();
   go("admin",{tab:"participants"});
 }
-function resetAll(){if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;STATE={participants:[],predictions:{},actuals:{},leagues:[]};localStorage.removeItem(LS);showFlash("✓ Borrado");go("landing")}
+function resetAll(){
+  if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
+  if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
+  STATE={participants:[],predictions:{},actuals:{},leagues:[]};
+  localStorage.removeItem(LS);
+  if(window._fbDB) window._fbDB.ref("q2026").remove().catch(function(){});
+  showFlash("✓ Borrado");go("landing");
+}
 
 // ── PDF GENERATION (2 pages, landscape A4) ─────────────
 function genPDF(pid){
