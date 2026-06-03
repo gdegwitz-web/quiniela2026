@@ -313,8 +313,10 @@ const LS="q2026";
 let STATE=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
 if(!STATE.leagues) STATE.leagues=[];
 
-// 2. Connect Firebase silently in background — never blocks anything
-(function(){
+window._fbDB=null;
+
+// 2. Connect Firebase after page fully loads — never blocks anything
+window.addEventListener("load",function(){
   try {
     firebase.initializeApp({
       apiKey:"AIzaSyDBTJ7xAkJ5Gd_6_nk6P-O3ExnwoVazqIU",
@@ -323,35 +325,30 @@ if(!STATE.leagues) STATE.leagues=[];
     });
     const db=firebase.database();
     window._fbDB=db;
-    // Listen for remote changes — only update STATE and re-render on safe pages
+    console.log("✅ Firebase conectado");
+    // Listen for remote changes — only update STATE silently, never interrupt UI
     db.ref("q2026").on("value",function(snap){
       const val=snap.val();
       if(!val) return;
-      const safe=["landing","leaderboard","admin","league"];
-      // Update STATE silently
+      // NEVER call renderApp() here — only update data silently
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals)      STATE.actuals=val.actuals;
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
       localStorage.setItem(LS,JSON.stringify(STATE));
-      // Only re-render on read-only pages, never interrupt user input
-      if(typeof ROUTE!=="undefined" && safe.includes(ROUTE.page)){
-        renderApp();
-      }
     });
   } catch(e){
     window._fbDB=null;
     console.warn("Firebase unavailable, using localStorage only");
   }
-})();
+});
 
 // 3. persist() — saves to localStorage instantly + Firebase in background
 function persist(){
   localStorage.setItem(LS,JSON.stringify(STATE));
   showFlash("✓ Guardado");
   if(window._fbDB){
-    // Convert arrays to objects keyed by id for Firebase
     const data={
       participants:{},predictions:STATE.predictions,
       actuals:STATE.actuals,leagues:{}
