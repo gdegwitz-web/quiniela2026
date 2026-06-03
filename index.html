@@ -342,7 +342,12 @@ if(window.DB){
       STATE.actuals      = val.actuals      || {};
       STATE.leagues      = val.leagues ? Object.values(val.leagues) : [];
       localStorage.setItem(LS, JSON.stringify(STATE));
-      if(typeof renderApp==="function") renderApp();
+      // Only re-render on pages that show live data from other users
+      // Never interrupt registration, login, or prediction filling
+      const safePages=["leaderboard","admin","league","landing"];
+      if(typeof ROUTE!=="undefined" && safePages.includes(ROUTE.page)){
+        if(typeof renderApp==="function") renderApp();
+      }
     }
   });
 }
