@@ -322,8 +322,11 @@ function initFirebase(){
     });
     const db=firebase.database();
     window._fbDB=db;
+    window._fbPaused=false;
     console.log("✅ Firebase conectado");
     db.ref("q2026").on("value",function(snap){
+      // Skip if we just wrote (avoids overwriting STATE during navigation)
+      if(window._fbPaused) return;
       const val=snap.val();
       if(!val) return;
       if(val.participants) STATE.participants=Object.values(val.participants);
@@ -338,35 +341,18 @@ function initFirebase(){
   }
 }
 
-// 3. persist() — saves to localStorage instantly + Firebase in background
 function persist(){
   localStorage.setItem(LS,JSON.stringify(STATE));
   showFlash("✓ Guardado");
   if(window._fbDB){
-    const data={
-      participants:{},predictions:STATE.predictions,
-      actuals:STATE.actuals,leagues:{}
-    };
+    window._fbPaused=true;
+    const data={participants:{},predictions:STATE.predictions,actuals:STATE.actuals,leagues:{}};
     (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
     (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
-    window._fbDB.ref("q2026").set(data).catch(function(e){
-      console.warn("Firebase write failed:",e.message);
-    });
-  }
-}
-
-// 3. persist() — saves to localStorage instantly + Firebase in background
-function persist(){
-  localStorage.setItem(LS,JSON.stringify(STATE));
-  showFlash("✓ Guardado");
-  if(window._fbDB){
-    const data={
-      participants:{},predictions:STATE.predictions,
-      actuals:STATE.actuals,leagues:{}
-    };
-    (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
-    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
-    window._fbDB.ref("q2026").set(data).catch(function(e){
+    window._fbDB.ref("q2026").set(data).then(function(){
+      setTimeout(function(){window._fbPaused=false;},3000);
+    }).catch(function(e){
+      window._fbPaused=false;
       console.warn("Firebase write failed:",e.message);
     });
   }
