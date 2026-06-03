@@ -234,9 +234,12 @@ function scoreGroups(pred,actual){
 function buildBracket(groups,ko){
   const std={};
   Object.keys(GROUPS).forEach(g=>{std[g]=calcStandings(g,groups)});
-  const slot=s=>{
+  // The 8 R32 match IDs that have a 3rd-place slot
+  const THIRD_SLOTS=[1,4,6,7,8,9,12,14];
+  const slot=(s,matchId)=>{
     if(s.t==="1")return std[s.g]?.[0]?.n||null;
     if(s.t==="2")return std[s.g]?.[1]?.n||null;
+    if(s.t==="3")return ko.third?.[matchId]||null; // user selects
     return null;
   };
   const R32D=[
@@ -249,7 +252,7 @@ function buildBracket(groups,ko){
     {id:12,h:{t:"1",g:"B"},a:{t:"3"}},{id:13,h:{t:"1",g:"J"},a:{t:"2",g:"H"}},
     {id:14,h:{t:"1",g:"K"},a:{t:"3"}},{id:15,h:{t:"2",g:"D"},a:{t:"2",g:"G"}}
   ];
-  const r32=R32D.map(m=>({id:m.id,h:slot(m.h),a:slot(m.a)}));
+  const r32=R32D.map(m=>({id:m.id,h:slot(m.h,m.id),a:slot(m.a,m.id),isThird:m.h.t==="3"||m.a.t==="3",thirdSide:m.h.t==="3"?"h":m.a.t==="3"?"a":null}));
   const r32w=Array.from({length:16},(_,i)=>ko.r32?.[i]||null);
 
   // ── OFFICIAL FIFA R16 PAIRINGS (from FIFA match schedule) ──
@@ -300,7 +303,9 @@ function buildBracket(groups,ko){
   const sf1L=sfw[1]?(sf[1].h===sfw[1]?sf[1].a:sf[1].h):null;
   const f3={id:0,h:sf0L,a:sf1L};
   return {r32,r16,qf,sf,fin,f3,champion,
-    r32w,r16w,qfw,sfw,finw:ko.final||{},f3w:ko.f3||{}};
+    r32w,r16w,qfw,sfw,finw:ko.final||{},f3w:ko.f3||{},
+    thirdPicks:ko.third||{},
+    thirdMatchIds:[1,4,6,7,8,9,12,14]};
 }
 
 // ─── STORAGE ──────────────────────────────────────────
@@ -596,7 +601,40 @@ function bracketSVG(pid,pred){
 
   svg+=`</svg>`;
 
+  // Build 3rd place selector — get all 12 third-place teams from standings
+  const thirds=Object.keys(GROUPS).map(g=>{
+    const st=calcStandings(g,pred.groups||{});
+    return {g, team:st[2]?.n||null};
+  });
+  // The 8 R32 match IDs that have a 3rd-place slot
+  const thirdMatchIds=[1,4,6,7,8,9,12,14];
+  // Labels for each slot — which group winner they face
+  const thirdLabels={1:"vs 1°E",4:"vs 1°I",6:"vs 1°A",7:"vs 1°L",8:"vs 1°D",9:"vs 1°G",12:"vs 1°B",14:"vs 1°K"};
+  const thirdPicks=pred.ko?.third||{};
+  const allThirds=thirds.filter(t=>t.team).map(t=>t.team);
+
+  const thirdsPanel=`<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.2);border-radius:12px;padding:.8rem;margin-bottom:.8rem">
+    <div style="font-size:.72rem;font-weight:700;letter-spacing:2px;color:#ffc800;margin-bottom:.5rem">🟡 8 TERCEROS LUGARES — SELECCIONA LOS EQUIPOS QUE CREES PASARÁN</div>
+    <div style="font-size:.68rem;color:#889;margin-bottom:.6rem;line-height:1.5">
+      Los 8 mejores terceros de los 12 grupos clasifican. FIFA determina a quién se enfrentan según una tabla de 495 combinaciones posibles. Elige cuál tercer lugar crees que va a cada llave.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem">
+      ${thirdMatchIds.map(mid=>{
+        const picked=thirdPicks[mid]||"";
+        return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:.4rem .5rem">
+          <div style="font-size:.6rem;color:#ffc800;font-weight:700;margin-bottom:.2rem">Llave ${mid+73} (${thirdLabels[mid]})</div>
+          <select onchange="pickThird('${pid}',${mid},this.value)"
+            style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#eee;padding:.3rem .4rem;font-size:.75rem;outline:none">
+            <option value="">-- Seleccionar --</option>
+            ${allThirds.map(t=>`<option value="${t}" ${picked===t?"selected":""}>${f(t)} ${t}</option>`).join("")}
+          </select>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+
   return `<div id="bracket-wrap">
+    ${thirdsPanel}
     <p style="font-size:.72rem;color:#667;margin:.3rem 0 .5rem">Haz clic en un equipo para seleccionarlo como ganador.</p>
     <button class="btn-red" style="padding:.35rem .7rem;font-size:.72rem;width:auto;margin-bottom:.5rem" onclick="clearBracket('${pid}')">🗑️ Limpiar bracket</button>
     ${svg}
@@ -1421,11 +1459,25 @@ function pickBracket(pid,round,matchId,team){
   });
 }
 
+function pickThird(pid,matchId,team){
+  const pred=STATE.predictions[pid];if(!pred)return;
+  if(!pred.ko)pred.ko={};
+  if(!pred.ko.third)pred.ko.third={};
+  if(team) pred.ko.third[matchId]=team;
+  else delete pred.ko.third[matchId];
+  // Save scroll before re-render
+  const bwrap=document.getElementById("bracket-wrap");
+  const scroll=bwrap?bwrap.scrollLeft:0;
+  setTimeout(function(){ persist(); },50);
+  go("predict",{pid,subtab:"bracket"});
+  requestAnimationFrame(function(){const w=document.getElementById("bracket-wrap");if(w)w.scrollLeft=scroll;});
+}
+
 function clearBracket(pid){
   if(!confirm("¿Limpiar todas las selecciones del bracket?"))return;
   STATE.predictions[pid].ko={};
-  persist();
   go("predict",{pid,subtab:"bracket"});
+  setTimeout(function(){ persist(); },50);
 }
 
 
