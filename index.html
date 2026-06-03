@@ -777,9 +777,10 @@ function doRegister(){
   const pid=uid();
   STATE.participants.push({id:pid,name,email:email.toLowerCase(),hidden:false});
   STATE.predictions[pid]={groups:{},ko:{},quinName:qname,pwdHash:hashPwd(pwd),submitted:false};
-  persist();
+  // Navigate FIRST — then persist in background
   SESSION.pid=pid;
   go("predict",{pid});
+  setTimeout(function(){ persist(); }, 50);
 }
 
 function pgReturning(){
@@ -1391,17 +1392,15 @@ function bindEvents(){
 
 // ── ACTIONS ───────────────────────────────────────────
 function saveForLater(pid){
-  persist();
-  showFlash("💾 Guardado — puedes continuar más tarde iniciando sesión");
-  // Keep SESSION.pid so they can come back without logging in again this session
   go("landing");
+  setTimeout(function(){ persist(); showFlash("💾 Guardado"); }, 50);
 }
 
 function submitPrediction(pid){
   if(!STATE.predictions[pid])return;
   STATE.predictions[pid].submitted=true;
-  persist();showFlash("✓ Quiniela enviada!");
   go("myscore",{pid});
+  setTimeout(function(){ persist(); showFlash("✓ Quiniela enviada!"); }, 50);
 }
 
 function pickBracket(pid,round,matchId,team){
