@@ -601,23 +601,44 @@ function bracketSVG(pid,pred){
 
   svg+=`</svg>`;
 
-  // Build 3rd place selector — get all 12 third-place teams from standings
+  // Build 3rd place selector — rank all 12 third-place teams by FIFA criteria
+  // Criteria: Points → GD → Goals Scored → (fair play not modeled) 
   const thirds=Object.keys(GROUPS).map(g=>{
     const st=calcStandings(g,pred.groups||{});
-    return {g, team:st[2]?.n||null};
-  });
+    const t3=st[2];
+    return t3 ? {g, team:t3.n, pts:t3.pts, dg:t3.dg, gf:t3.gf} : null;
+  }).filter(Boolean);
+
+  // Sort by FIFA 3rd-place ranking criteria
+  thirds.sort((a,b)=>b.pts-a.pts||b.dg-a.dg||b.gf-a.gf);
+
+  // Top 8 qualify — only show those in the dropdown
+  const top8Thirds=thirds.slice(0,8);
+  const hasEnoughData=thirds.length>=8; // only rank if all groups have scores
+
   // The 8 R32 match IDs that have a 3rd-place slot
   const thirdMatchIds=[1,4,6,7,8,9,12,14];
   // Labels for each slot — which group winner they face
   const thirdLabels={1:"vs 1°E",4:"vs 1°I",6:"vs 1°A",7:"vs 1°L",8:"vs 1°D",9:"vs 1°G",12:"vs 1°B",14:"vs 1°K"};
   const thirdPicks=pred.ko?.third||{};
-  const allThirds=thirds.filter(t=>t.team).map(t=>t.team);
+
+  // Show all 12 if not enough data to rank, otherwise only top 8
+  const dropdownTeams=top8Thirds.length>=8 ? top8Thirds : thirds;
 
   const thirdsPanel=`<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.2);border-radius:12px;padding:.8rem;margin-bottom:.8rem">
-    <div style="font-size:.72rem;font-weight:700;letter-spacing:2px;color:#ffc800;margin-bottom:.5rem">🟡 8 TERCEROS LUGARES — SELECCIONA LOS EQUIPOS QUE CREES PASARÁN</div>
-    <div style="font-size:.68rem;color:#889;margin-bottom:.6rem;line-height:1.5">
-      Los 8 mejores terceros de los 12 grupos clasifican. FIFA determina a quién se enfrentan según una tabla de 495 combinaciones posibles. Elige cuál tercer lugar crees que va a cada llave.
-    </div>
+    <div style="font-size:.72rem;font-weight:700;letter-spacing:2px;color:#ffc800;margin-bottom:.5rem">🟡 8 TERCEROS LUGARES</div>
+    ${top8Thirds.length>=8
+      ? `<div style="font-size:.68rem;color:#4de0a0;margin-bottom:.5rem">✓ Top 8 calculados según tus predicciones (pts · DG · GF)</div>
+         <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.6rem">
+           ${top8Thirds.map((t,i)=>`<span style="background:rgba(0,200,83,.1);border:1px solid rgba(0,200,83,.25);border-radius:5px;padding:.15rem .4rem;font-size:.65rem;color:#4de0a0">
+             ${i+1}. ${f(t.team)} ${t.team} <span style="color:#889">(${t.pts}pts)</span>
+           </span>`).join("")}
+         </div>`
+      : `<div style="font-size:.68rem;color:#889;margin-bottom:.5rem">
+           Llena los marcadores de los grupos para ver el ranking de terceros. Por ahora se muestran todos los terceros disponibles.
+         </div>`
+    }
+    <div style="font-size:.68rem;color:#889;margin-bottom:.6rem">Elige cuál tercer lugar va a cada llave del bracket:</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem">
       ${thirdMatchIds.map(mid=>{
         const picked=thirdPicks[mid]||"";
@@ -626,7 +647,7 @@ function bracketSVG(pid,pred){
           <select onchange="pickThird('${pid}',${mid},this.value)"
             style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#eee;padding:.3rem .4rem;font-size:.75rem;outline:none">
             <option value="">-- Seleccionar --</option>
-            ${allThirds.map(t=>`<option value="${t}" ${picked===t?"selected":""}>${f(t)} ${t}</option>`).join("")}
+            ${dropdownTeams.map(t=>`<option value="${t.team}" ${picked===t.team?"selected":""}>${f(t.team)} ${t.team} (${t.pts}pts, DG:${t.dg>0?"+":""}${t.dg})</option>`).join("")}
           </select>
         </div>`;
       }).join("")}
