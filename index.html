@@ -1015,10 +1015,14 @@ function lgTabHTML(pid){
 function pgLeague(lid, pid){
   if(SESSION.pid!==pid){go("returning");return"";}
   const lg=STATE.leagues.find(l=>l.id===lid);
-  if(!lg)return`<div style="padding:2rem;text-align:center;color:#889">Liga no encontrada. Puede haber sido eliminada.</div>`;
+  if(!lg)return`<div style="padding:2rem;text-align:center;color:#889">Liga no encontrada.</div>`;
 
-  // Share text for clipboard
-  const shareText=`🏆 Únete a mi liga "${lg.name}" en la Quiniela FIFA 2026!\nCódigo: ${lg.code}\nEntra a la app → Mi Puntaje → 🏅 Mis Ligas → Unirse con código`;
+  const appUrl="https://gdegwitz-web.github.io/quiniela2026";
+  const waText=encodeURIComponent("🏆 Únete a mi liga *"+lg.name+"* en la Quiniela FIFA 2026!\nCódigo: *"+lg.code+"*\n👉 "+appUrl);
+  const waLink="https://wa.me/?text="+waText;
+
+  // Store share text for copy button (avoid inline quotes issues)
+  window._lgShareText="Únete a mi liga "+lg.name+" - Quiniela FIFA 2026\nCódigo: "+lg.code+"\n"+appUrl;
 
   return `
   <div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;gap:.6rem;margin:0 -.8rem .8rem">
@@ -1033,11 +1037,17 @@ function pgLeague(lid, pid){
   <!-- Share card -->
   <div style="background:rgba(255,200,0,.07);border:1px solid rgba(255,200,0,.2);border-radius:12px;padding:.85rem;margin-bottom:.8rem;text-align:center">
     <div style="font-size:.72rem;color:#aaa;margin-bottom:.4rem">Comparte este código con tus amigos</div>
-    <div style="font-size:2rem;font-weight:700;letter-spacing:8px;color:#ffc800;font-family:monospace">${lg.code}</div>
-    <button onclick="navigator.clipboard?.writeText('${shareText.replace(/'/g,"\\'")}').then(()=>showFlash('✓ Copiado al portapapeles')).catch(()=>showFlash('Código: ${lg.code}'))"
-      style="margin-top:.6rem;background:rgba(255,200,0,.15);border:1px solid rgba(255,200,0,.3);color:#ffc800;border-radius:7px;padding:.35rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer">
-      📋 COPIAR INVITACIÓN
-    </button>
+    <div style="font-size:2rem;font-weight:700;letter-spacing:8px;color:#ffc800;font-family:monospace;margin-bottom:.75rem">${lg.code}</div>
+    <div style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap">
+      <a href="${waLink}" target="_blank"
+        style="display:inline-flex;align-items:center;gap:.4rem;background:#25D366;color:#fff;border:none;border-radius:8px;padding:.45rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;text-decoration:none">
+        <span style="font-size:1.1rem">📲</span> ENVIAR POR WHATSAPP
+      </a>
+      <button onclick="navigator.clipboard.writeText(window._lgShareText).then(function(){showFlash('✓ Copiado')}).catch(function(){showFlash('Código: ${lg.code}')})"
+        style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(255,200,0,.15);border:1px solid rgba(255,200,0,.3);color:#ffc800;border-radius:8px;padding:.45rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer">
+        <span style="font-size:1rem">📋</span> COPIAR
+      </button>
+    </div>
   </div>
 
   <!-- Standings -->
@@ -1046,7 +1056,7 @@ function pgLeague(lid, pid){
     ${lgRankHTML(lg, pid)}
   </div>
 
-  <!-- How to join instructions -->
+  <!-- How to join -->
   <div style="background:rgba(80,130,240,.06);border:1px solid rgba(80,130,240,.18);border-radius:12px;padding:.85rem;margin-bottom:.8rem;font-size:.75rem;color:#aab;line-height:1.6">
     <strong style="color:#88aaff;display:block;margin-bottom:.3rem">ℹ️ ¿Cómo se unen tus amigos?</strong>
     1. Abren la app y se registran o inician sesión<br>
