@@ -328,49 +328,57 @@ function buildBracket(groups,ko){
 // ─── STORAGE ──────────────────────────────────────────
 const LS="q2026";
 
-// ── Load initial state from localStorage (instant, no flicker) ──
+// ── Load state immediately from localStorage (app starts instantly) ──
 let STATE=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
 if(!STATE.leagues) STATE.leagues=[];
 
-// ── Firebase: subscribe to live data ──
+// ── Firebase sync in background (non-blocking) ──
 let _fbRefreshTimer=null;
-if(window.DB){
-  window.DB.ref("quiniela").on("value", snap=>{
-    const val=snap.val();
-    if(val){
-      STATE.participants = val.participants ? Object.values(val.participants) : [];
-      STATE.predictions  = val.predictions  || {};
-      STATE.actuals      = val.actuals      || {};
-      STATE.leagues      = val.leagues ? Object.values(val.leagues) : [];
-      localStorage.setItem(LS, JSON.stringify(STATE));
-      // Only auto-refresh read-only pages, never during user input
-      // Use a small delay so user actions always complete first
-      clearTimeout(_fbRefreshTimer);
-      _fbRefreshTimer = setTimeout(()=>{
-        const safePages=["leaderboard","admin","league","landing"];
-        if(typeof ROUTE!=="undefined" && safePages.includes(ROUTE.page)){
-          if(typeof renderApp==="function") renderApp();
+setTimeout(()=>{
+  if(!window.DB) return;
+  try {
+    window.DB.ref("quiniela").on("value", snap=>{
+      try {
+        const val=snap.val();
+        if(val){
+          STATE.participants = val.participants ? Object.values(val.participants) : (STATE.participants||[]);
+          STATE.predictions  = val.predictions  || STATE.predictions || {};
+          STATE.actuals      = val.actuals      || STATE.actuals || {};
+          STATE.leagues      = val.leagues ? Object.values(val.leagues) : (STATE.leagues||[]);
+          if(!STATE.leagues) STATE.leagues=[];
+          localStorage.setItem(LS, JSON.stringify(STATE));
+          clearTimeout(_fbRefreshTimer);
+          _fbRefreshTimer=setTimeout(()=>{
+            const safePages=["leaderboard","admin","league","landing"];
+            if(typeof ROUTE!=="undefined" && safePages.includes(ROUTE.page)){
+              renderApp();
+            }
+          }, 800);
         }
-      }, 800);
-    }
-  });
-}
+      } catch(e){ console.warn("Firebase value error:", e); }
+    });
+  } catch(e){ console.warn("Firebase subscribe error:", e); }
+}, 100);
 
 // ── Persist to Firebase + localStorage ──
 function persist(){
   localStorage.setItem(LS, JSON.stringify(STATE));
-  if(window.DB){
-    const pObj={}, lObj={};
-    STATE.participants.forEach(p=>pObj[p.id]=p);
-    STATE.leagues.forEach(l=>lObj[l.id]=l);
-    window.DB.ref("quiniela").set({
-      participants: pObj,
-      predictions:  STATE.predictions,
-      actuals:      STATE.actuals,
-      leagues:      lObj
-    }).catch(e=>console.error("Firebase write:",e));
-  }
   showFlash("✓ Guardado");
+  if(window.DB){
+    setTimeout(()=>{
+      try {
+        const pObj={}, lObj={};
+        (STATE.participants||[]).forEach(p=>{ if(p&&p.id) pObj[p.id]=p; });
+        (STATE.leagues||[]).forEach(l=>{ if(l&&l.id) lObj[l.id]=l; });
+        window.DB.ref("quiniela").set({
+          participants: pObj,
+          predictions:  STATE.predictions||{},
+          actuals:      STATE.actuals||{},
+          leagues:      lObj
+        }).catch(e=>console.warn("Firebase write:",e));
+      } catch(e){ console.warn("Firebase persist error:", e); }
+    }, 0);
+  }
 }
 
 let _ft;
@@ -1490,7 +1498,7 @@ function resetAll(){
   if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
   localStorage.removeItem(LS);
-  if(window.DB) window.DB.ref("quiniela").remove().catch(e=>console.error(e));
+  if(window.DB) window.DB.ref("quiniela").remove().catch(e=>console.warn(e));
   showFlash("✓ Borrado");
   go("landing");
 }
