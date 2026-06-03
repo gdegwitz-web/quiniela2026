@@ -90,9 +90,6 @@ button:hover{opacity:.85}
 .lg-admin-panel{display:none}
 .lg-admin-panel.open{display:block}
 </style>
-<!-- Firebase (loaded async - never blocks the app) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 <div id="app"><div style="text-align:center;padding:3rem;color:#ffc800">⚽ Cargando...</div></div>
@@ -315,8 +312,8 @@ if(!STATE.leagues) STATE.leagues=[];
 
 window._fbDB=null;
 
-// 2. Connect Firebase after page fully loads — never blocks anything
-window.addEventListener("load",function(){
+// 2. Called by Firebase scripts after they load at bottom of body
+function initFirebase(){
   try {
     firebase.initializeApp({
       apiKey:"AIzaSyDBTJ7xAkJ5Gd_6_nk6P-O3ExnwoVazqIU",
@@ -326,11 +323,9 @@ window.addEventListener("load",function(){
     const db=firebase.database();
     window._fbDB=db;
     console.log("✅ Firebase conectado");
-    // Listen for remote changes — only update STATE silently, never interrupt UI
     db.ref("q2026").on("value",function(snap){
       const val=snap.val();
       if(!val) return;
-      // NEVER call renderApp() here — only update data silently
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals)      STATE.actuals=val.actuals;
@@ -339,10 +334,26 @@ window.addEventListener("load",function(){
       localStorage.setItem(LS,JSON.stringify(STATE));
     });
   } catch(e){
-    window._fbDB=null;
-    console.warn("Firebase unavailable, using localStorage only");
+    console.warn("Firebase unavailable:",e.message);
   }
-});
+}
+
+// 3. persist() — saves to localStorage instantly + Firebase in background
+function persist(){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  showFlash("✓ Guardado");
+  if(window._fbDB){
+    const data={
+      participants:{},predictions:STATE.predictions,
+      actuals:STATE.actuals,leagues:{}
+    };
+    (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
+    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
+    window._fbDB.ref("q2026").set(data).catch(function(e){
+      console.warn("Firebase write failed:",e.message);
+    });
+  }
+}
 
 // 3. persist() — saves to localStorage instantly + Firebase in background
 function persist(){
@@ -1769,5 +1780,9 @@ function genPDF(pid){
 // ── BOOT ──────────────────────────────────────────────
 renderApp();
 </script>
+
+<!-- Firebase loaded AFTER app boots — guaranteed available when initFirebase() runs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onload="window._fbAppReady=true;if(window._fbDbReady)initFirebase()"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js" onload="window._fbDbReady=true;if(window._fbAppReady)initFirebase()"></script>
 </body>
 </html>
