@@ -189,12 +189,18 @@ function togglePwd(id){
   if(el) el.type=el.type==="password"?"text":"password";
 }
 
-// ─── SESSION (in-memory, cleared on page reload) ──────
-// This means users must log in again after closing the tab — by design.
-const SESSION={pid:null};
+// ─── SESSION — persisted in localStorage for auto-login ───
+const SESSION_KEY="q2026_session";
+const SESSION={
+  get pid(){
+    try{return localStorage.getItem(SESSION_KEY)||null;}catch(e){return null;}
+  },
+  set pid(v){
+    try{if(v)localStorage.setItem(SESSION_KEY,v);else localStorage.removeItem(SESSION_KEY);}catch(e){}
+  }
+};
 function logout(){SESSION.pid=null;go("landing");}
 function requireSession(pid){
-  // If SESSION.pid doesn't match requested pid, force login
   if(SESSION.pid!==pid) go("returning");
 }
 
@@ -670,19 +676,19 @@ function pgLanding(){
   const activePred=activePid?STATE.predictions[activePid]:null;
   const isSubmitted=activePred?.submitted;
 
-  return heroHTML()+`
-  ${activeP?`<div style="background:rgba(0,200,83,.08);border:1px solid rgba(0,200,83,.25);border-radius:12px;padding:.9rem 1rem;margin-bottom:.8rem;display:flex;align-items:center;gap:.7rem">
-    <span style="font-size:1.4rem">⚽</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-weight:700;font-size:.9rem;color:#4de0a0">${activeP.name}</div>
-      <div style="font-size:.7rem;color:#889">"${activePred?.quinName||"Mi Quiniela"}" · Sesión activa</div>
-    </div>
-    <button class="btn-green" style="width:auto;padding:.4rem .9rem;font-size:.8rem;margin:0"
-      onclick="go('${isSubmitted?"myscore":"predict"}',{pid:'${activePid}'})">
-      ${isSubmitted?"VER MI QUINIELA →":"CONTINUAR →"}
-    </button>
-  </div>`:""}
+  // Auto-redirect if session is active and participant exists
+  if(activeP && activePred){
+    // Use setTimeout to avoid render-during-render
+    setTimeout(function(){
+      go(isSubmitted?"myscore":"predict",{pid:activePid});
+    },0);
+    return `<div style="text-align:center;padding:3rem">
+      <div style="font-size:2rem;margin-bottom:.5rem">⚽</div>
+      <div style="color:#ffc800;font-size:.9rem">Cargando tu quiniela...</div>
+    </div>`;
+  }
 
+  return heroHTML()+`
   <div class="card">
     <h2>¿CÓMO QUIERES CONTINUAR?</h2>
     <div class="choice">
@@ -948,6 +954,97 @@ function pgPredict(pid){
   </div>`;
 }
 
+function hoyTab(pid,pred){
+  // Get today's date in "Jun 11" format matching MATCHES
+  const now=new Date();
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const todayStr=months[now.getMonth()]+" "+now.getDate();
+
+  // Find today's matches
+  const todayMatches=MATCHES.filter(m=>m.date===todayStr);
+
+  if(todayMatches.length===0){
+    // Check if tournament hasn't started or has ended
+    const allDates=[...new Set(MATCHES.map(m=>m.date))];
+    return `<div style="text-align:center;padding:1.5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:.5rem 0">
+      <div style="font-size:2rem;margin-bottom:.5rem">📅</div>
+      <div style="font-weight:700;font-size:.9rem;color:#ffc800;margin-bottom:.3rem">No hay partidos hoy</div>
+      <div style="font-size:.75rem;color:#889">Hoy es ${todayStr}. Los partidos del Mundial son del ${allDates[0]} al ${allDates[allDates.length-1]}.</div>
+    </div>`;
+  }
+
+  // Calculate daily points
+  let dayPts=0;
+  const matchRows=todayMatches.map(m=>{
+    const pr=pred.groups?.[m.id];
+    const ac=STATE.actuals?.[m.id];
+    let pts=0, badge="", status="";
+
+    if(pr&&ac&&pr.h!==""&&pr.a!==""&&ac.h!==""&&ac.a!==""){
+      const ph=parseInt(pr.h),pa=parseInt(pr.a),ah=parseInt(ac.h),aa=parseInt(ac.a);
+      if(ph===ah&&pa===aa){
+        pts=5; badge=`<span style="background:#00c853;color:#000;border-radius:4px;padding:.1rem .4rem;font-size:.7rem;font-weight:700">+5 ⭐</span>`;
+        status="exact";
+      } else {
+        const pw=ph>pa?"h":pa>ph?"a":"d", aw=ah>aa?"h":aa>ah?"a":"d";
+        if(pw===aw){
+          pts=3; badge=`<span style="background:#0080ff;color:#fff;border-radius:4px;padding:.1rem .4rem;font-size:.7rem;font-weight:700">+3</span>`;
+          status="win";
+        } else {
+          badge=`<span style="background:rgba(255,100,100,.2);color:#ff8080;border-radius:4px;padding:.1rem .4rem;font-size:.7rem;font-weight:700">0</span>`;
+          status="miss";
+        }
+      }
+      dayPts+=pts;
+    } else if(ac&&ac.h!==""&&ac.a!==""){
+      // Match played but no prediction
+      badge=`<span style="color:#667;font-size:.7rem">Sin predicción</span>`;
+    } else if(pr&&pr.h!==""&&pr.a!==""){
+      // Prediction exists, match not yet played
+      badge=`<span style="color:#889;font-size:.7rem">Pendiente</span>`;
+      status="pending";
+    }
+
+    const borderCol=status==="exact"?"rgba(0,200,83,.35)":status==="win"?"rgba(0,128,255,.35)":status==="miss"?"rgba(255,100,100,.2)":"rgba(255,255,255,.08)";
+    const bgCol=status==="exact"?"rgba(0,200,83,.07)":status==="win"?"rgba(0,128,255,.06)":status==="miss"?"rgba(255,100,100,.05)":"rgba(255,255,255,.04)";
+
+    return `<div style="background:${bgCol};border:1px solid ${borderCol};border-radius:9px;padding:.6rem .75rem;margin:.3rem 0">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.4rem;margin-bottom:.35rem">
+        <div style="font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:.3rem">${f(m.h)} ${trunc(m.h,10)}</div>
+        <div style="text-align:center">
+          ${ac&&ac.h!==""
+            ? "<div style=\"font-size:.95rem;font-weight:700;color:#eee\">"+ac.h+":"+ac.a+"</div><div style=\"font-size:.6rem;color:#667\">resultado</div>"
+            : "<div style=\"font-size:.75rem;color:#556\">vs</div>"
+          }
+        </div>
+        <div style="font-size:.78rem;font-weight:600;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:.3rem">${trunc(m.a,10)} ${f(m.a)}</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem">
+        <div style="font-size:.72rem;color:#889">
+          Mi predicción: <strong style="color:${pr&&pr.h!==""?"#eee":"#556"}">${pr&&pr.h!==""?pr.h+":"+pr.a:"—"}</strong>
+        </div>
+        <div>${badge}</div>
+      </div>
+    </div>`;
+  });
+
+  const playedToday=todayMatches.filter(m=>{const ac=STATE.actuals?.[m.id];return ac&&ac.h!=="";}).length;
+
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+    <div>
+      <div style="font-size:.75rem;font-weight:700;letter-spacing:1px;color:#ffc800">📅 ${todayStr.toUpperCase()}</div>
+      <div style="font-size:.68rem;color:#889">${todayMatches.length} partido${todayMatches.length!==1?"s":""} hoy · ${playedToday} jugado${playedToday!==1?"s":""}</div>
+    </div>
+    ${playedToday>0?`<div style="background:rgba(255,200,0,.1);border:1px solid rgba(255,200,0,.3);border-radius:10px;padding:.4rem .8rem;text-align:center">
+      <div style="font-size:1.4rem;font-weight:700;color:#ffc800;line-height:1">${dayPts}</div>
+      <div style="font-size:.6rem;color:#889">pts hoy</div>
+    </div>`:""}
+  </div>
+  ${matchRows.join("")}`;
+}
+
+
 function pgMyScore(pid){
   // Security: require active session
   if(SESSION.pid!==pid){go("returning");return"";}
@@ -956,7 +1053,7 @@ function pgMyScore(pid){
   const pred=STATE.predictions[pid]||{};
   const gPts=scoreGroups(pred.groups||{},STATE.actuals);
   const qn=pred.quinName||"Mi Quiniela";
-  const tab=ROUTE.subtab||"score";
+  const tab=ROUTE.subtab||"hoy";
   const grp=ROUTE.grp||"A";
 
   return `<div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;justify-content:space-between;margin:0 -.8rem .8rem">
@@ -968,10 +1065,12 @@ function pgMyScore(pid){
     <button class="btn-gray" style="width:auto;padding:.28rem .65rem;font-size:.72rem" onclick="logout()">SALIR</button>
   </div>
   <div class="tabs" style="overflow-x:auto;white-space:nowrap">
+    <button class="tab${tab==="hoy"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'hoy'})">📅 HOY</button>
     <button class="tab${tab==="score"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'score'})">🏆 PUNTAJE</button>
     <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})">📋 PREDICCIONES</button>
     <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})">🏅 MIS LIGAS</button>
   </div>
+  ${tab==="hoy"?hoyTab(pid,pred):""}
   ${tab==="score"?`
     <div class="score-banner">
       <div style="font-size:.75rem;letter-spacing:2px;color:#ffc80099">"${qn}"</div>
