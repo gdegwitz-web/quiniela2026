@@ -624,12 +624,35 @@ function bracketSVG(pid,pred){
 
   // The 8 R32 match IDs that have a 3rd-place slot
   const thirdMatchIds=[1,4,6,7,8,9,12,14];
-  // Labels for each slot — which group winner they face
-  const thirdLabels={1:"vs 1°E",4:"vs 1°I",6:"vs 1°A",7:"vs 1°L",8:"vs 1°D",9:"vs 1°G",12:"vs 1°B",14:"vs 1°K"};
+  // Which group winner each 3rd place slot faces — 3rd from same group is excluded
+  const thirdExcludeGroup={1:"E",4:"I",6:"A",7:"L",8:"D",9:"G",12:"B",14:"K"};
+
+  // Build labels using actual team names from standings
+  const std2={};
+  Object.keys(GROUPS).forEach(g=>{std2[g]=calcStandings(g,pred.groups||{});});
+  function first(g){ return std2[g]?.[0]?.n||("1°"+g); }
+  const thirdLabels={
+    1:"vs "+first("E"), 4:"vs "+first("I"), 6:"vs "+first("A"), 7:"vs "+first("L"),
+    8:"vs "+first("D"), 9:"vs "+first("G"),12:"vs "+first("B"),14:"vs "+first("K")
+  };
   const thirdPicks=pred.ko?.third||{};
 
-  // Show all 12 if not enough data to rank, otherwise only top 8
-  const dropdownTeams=top8Thirds.length>=8 ? top8Thirds : thirds;
+  // Pool to draw from: top 8 if enough data, otherwise all available thirds
+  const pool=top8Thirds.length>=8 ? top8Thirds : thirds;
+
+  // For each slot, build its filtered dropdown:
+  // - Remove 3rd from same group as opponent
+  // - Remove teams already picked in OTHER slots
+  function poolForSlot(mid){
+    const excludeGroup=thirdExcludeGroup[mid];
+    const pickedElsewhere=thirdMatchIds
+      .filter(id=>id!==mid && thirdPicks[id])
+      .map(id=>thirdPicks[id]);
+    return pool.filter(t=>
+      t.g!==excludeGroup &&           // not from same group as opponent
+      !pickedElsewhere.includes(t.team) // not already used in another slot
+    );
+  }
 
   const thirdsPanel=`<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.2);border-radius:12px;padding:.8rem;margin-bottom:.8rem">
     <div style="font-size:.72rem;font-weight:700;letter-spacing:2px;color:#ffc800;margin-bottom:.5rem">🟡 8 TERCEROS LUGARES</div>
@@ -644,17 +667,23 @@ function bracketSVG(pid,pred){
            Llena los marcadores de los grupos para ver el ranking de terceros. Por ahora se muestran todos los terceros disponibles.
          </div>`
     }
-    <div style="font-size:.68rem;color:#889;margin-bottom:.6rem">Elige cuál tercer lugar va a cada llave del bracket:</div>
+    <div style="font-size:.68rem;color:#889;margin-bottom:.6rem">Elige cuál tercer lugar va a cada llave. Los equipos del mismo grupo que el rival y los ya asignados a otra llave no aparecen:</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem">
       ${thirdMatchIds.map(mid=>{
         const picked=thirdPicks[mid]||"";
-        return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:.4rem .5rem">
-          <div style="font-size:.6rem;color:#ffc800;font-weight:700;margin-bottom:.2rem">Llave ${mid+73} (${thirdLabels[mid]})</div>
+        const available=poolForSlot(mid);
+        // If current pick is now invalid (e.g. same group), show warning
+        const pickedValid=!picked||available.some(t=>t.team===picked);
+        return `<div style="background:rgba(255,255,255,.04);border:1px solid ${pickedValid?"rgba(255,255,255,.1)":"rgba(255,100,100,.3)"};border-radius:7px;padding:.4rem .5rem">
+          <div style="font-size:.6rem;color:#ffc800;font-weight:700;margin-bottom:.2rem">M${mid+73} · ${thirdLabels[mid]}</div>
+          <div style="font-size:.58rem;color:#667;margin-bottom:.2rem">No disponible: 3°${std2[thirdExcludeGroup[mid]]?.[2]?.n||("Gr."+thirdExcludeGroup[mid])}${thirdMatchIds.filter(id=>id!==mid&&thirdPicks[id]).length>0?" · ya asignados":""}</div>
           <select onchange="pickThird('${pid}',${mid},this.value)"
             style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#eee;padding:.3rem .4rem;font-size:.75rem;outline:none">
             <option value="">-- Seleccionar --</option>
-            ${dropdownTeams.map(t=>`<option value="${t.team}" ${picked===t.team?"selected":""}>${f(t.team)} ${t.team} (${t.pts}pts, DG:${t.dg>0?"+":""}${t.dg})</option>`).join("")}
+            ${available.map(t=>`<option value="${t.team}" ${picked===t.team?"selected":""}>${f(t.team)} ${t.team} (${t.pts}pts, DG:${t.dg>0?"+":""}${t.dg})</option>`).join("")}
+            ${picked&&!pickedValid?`<option value="${picked}" selected style="color:#ff8080">⚠ ${picked} (no válido)</option>`:""}
           </select>
+          ${available.length===0?`<div style="font-size:.62rem;color:#f77;margin-top:.2rem">⚠ Sin opciones disponibles</div>`:""}
         </div>`;
       }).join("")}
     </div>
