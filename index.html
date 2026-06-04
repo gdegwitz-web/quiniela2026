@@ -924,6 +924,57 @@ function pgPredict(pid){
   const grp=ROUTE.grp||"A";
   const filled=MATCHES.filter(m=>{const s=pred.groups[m.id];return s&&s.h!==""&&s.a!=="";}).length;
 
+  // ── Completeness check — detailed per section ──
+  const ko=pred.ko||{};
+
+  // Groups: all 72 matches
+  const groupsDone = filled===MATCHES.length;
+  const groupsMissing = MATCHES.length - filled;
+
+  // 3rd place slots: all 8
+  const thirdCount=Object.keys(ko.third||{}).length;
+  const thirdDone = thirdCount>=8;
+
+  // R32: 16 matches, but only the 8 non-third-place slots need picks here
+  // (the other 8 come from third picks). Count picks for matches 0,2,3,5,10,11,13,15 (non-third slots)
+  const nonThirdIds=[0,2,3,5,10,11,13,15];
+  const r32RegPicks=nonThirdIds.filter(id=>(ko.r32||{})[id]).length;
+  const r32RegDone = r32RegPicks>=8;
+
+  // R16: 8 matches (ids 0-7)
+  const r16Count=Object.keys(ko.r16||{}).length;
+  const r16Done = r16Count>=8;
+
+  // QF: 4 matches
+  const qfCount=Object.keys(ko.qf||{}).length;
+  const qfDone = qfCount>=4;
+
+  // SF: 2 matches
+  const sfCount=Object.keys(ko.sf||{}).length;
+  const sfDone = sfCount>=2;
+
+  // Final: 1 match
+  const finalCount=Object.keys(ko.final||{}).length;
+  const finalDone = finalCount>=1;
+
+  // 3rd place match: 1
+  const f3Count=Object.keys(ko.f3||{}).length;
+  const f3Done = f3Count>=1;
+
+  const bracketDone = thirdDone && r32RegDone && r16Done && qfDone && sfDone && finalDone && f3Done;
+  const allDone = groupsDone && bracketDone;
+
+  // Detailed missing list
+  const missing=[];
+  if(!groupsDone) missing.push(`⚽ Grupos: faltan ${groupsMissing} partido${groupsMissing!==1?"s":""}`);
+  if(!thirdDone) missing.push(`🟡 Terceros: ${8-thirdCount} llave${8-thirdCount!==1?"s":""} sin seleccionar`);
+  if(!r32RegDone) missing.push(`⚔️ R32: ${8-r32RegPicks} partido${8-r32RegPicks!==1?"s":""} sin ganador`);
+  if(!r16Done) missing.push(`🎯 Octavos: ${8-r16Count} partido${8-r16Count!==1?"s":""} sin ganador`);
+  if(!qfDone) missing.push(`🏟 Cuartos: ${4-qfCount} partido${4-qfCount!==1?"s":""} sin ganador`);
+  if(!sfDone) missing.push(`🔥 Semis: ${2-sfCount} partido${2-sfCount!==1?"s":""} sin ganador`);
+  if(!finalDone) missing.push(`⚽ Final: sin campeón seleccionado`);
+  if(!f3Done) missing.push(`🥉 3er lugar: sin seleccionar`);
+
   let body="";
   if(tab==="groups"){
     const rows=calcStandings(grp,pred.groups||{});
@@ -978,8 +1029,25 @@ function pgPredict(pid){
   ${body}
   <div style="padding:.7rem 0;display:flex;flex-direction:column;gap:.35rem">
     <button class="btn-gray" onclick="saveForLater('${pid}')">💾 GUARDAR Y CONTINUAR DESPUÉS</button>
-    <button class="btn-pdf" onclick="genPDF('${pid}')">📄 DESCARGAR PDF</button>
-    <button class="btn-green" onclick="submitPrediction('${pid}')">✓ FINALIZAR Y ENVIAR MI QUINIELA</button>
+
+    ${!allDone?`
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.75rem">
+      <div style="font-size:.72rem;font-weight:700;color:#ffaa44;margin-bottom:.5rem">📋 PENDIENTE PARA ENVIAR:</div>
+      <div style="display:flex;flex-direction:column;gap:.25rem">
+        ${missing.map(m=>`<div style="display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:#ccc">
+          <span style="color:#f77;font-size:.65rem">✗</span> ${m}
+          ${m.includes("Grupos")?`<button onclick="go('predict',{pid:'${pid}',subtab:'groups',grp:'A'})" style="margin-left:auto;background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.25);border-radius:5px;padding:.15rem .45rem;font-size:.65rem;cursor:pointer;width:auto">IR →</button>`:""}
+          ${m.includes("R32")||m.includes("Octavos")||m.includes("Cuartos")||m.includes("Semis")||m.includes("Final")||m.includes("3er")||m.includes("Terceros")?`<button onclick="go('predict',{pid:'${pid}',subtab:'${m.includes("Terceros")?"bracket":"bracket"}'})" style="margin-left:auto;background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.25);border-radius:5px;padding:.15rem .45rem;font-size:.65rem;cursor:pointer;width:auto">IR →</button>`:""}
+        </div>`).join("")}
+      </div>
+    </div>
+    <button style="padding:.7rem;background:rgba(255,255,255,.06);color:#556;border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:.88rem;font-weight:700;cursor:not-allowed;width:100%">
+      ✓ FINALIZAR Y ENVIAR (completa todo primero)
+    </button>`:`
+    <button onclick="submitPrediction('${pid}')"
+      style="padding:.7rem;background:#00c853;color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;width:100%">
+      ✓ FINALIZAR Y ENVIAR MI QUINIELA
+    </button>`}
   </div>`;
 }
 
@@ -1586,6 +1654,7 @@ function saveForLater(pid){
 function submitPrediction(pid){
   if(!STATE.predictions[pid])return;
   STATE.predictions[pid].submitted=true;
+  STATE.predictions[pid].submittedAt=new Date().toISOString();
   go("myscore",{pid});
   setTimeout(function(){ persist(); showFlash("✓ Quiniela enviada!"); }, 50);
 }
@@ -1681,6 +1750,13 @@ function genPDF(pid){
   const pred=STATE.predictions[pid]||{};
   const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
   const W=297,H=210,M=8;
+
+  // Submission date/time string
+  const submittedAt=pred.submittedAt?new Date(pred.submittedAt):null;
+  const submitStr=submittedAt
+    ? "Enviada: "+submittedAt.toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
+      +" "+submittedAt.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})
+    : "Borrador — "+new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"});
 
   // ── Color helpers ──
   const bg=(r,g,b)=>doc.setFillColor(r,g,b);
@@ -1785,7 +1861,7 @@ function genPDF(pid){
   // Footer p1
   bg(10,20,50);doc.rect(0,H-5,W,5,"F");
   col(180,190,210);font("normal",4);
-  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  Pág. 1 de 2  |  ${new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}`,W/2,H-1.8,{align:"center"});
+  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  ${submitStr}  |  Pág. 1 de 2`,W/2,H-1.8,{align:"center"});
 
   // ────────────────────────────────────────────────────
   // PAGE 2 — BRACKET
@@ -1958,7 +2034,7 @@ function genPDF(pid){
   // Footer p2
   bg(10,20,50);doc.rect(0,H-5,W,5,"F");
   col(180,190,210);font("normal",4);
-  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  Pág. 2 de 2  |  ${new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}`,W/2,H-1.8,{align:"center"});
+  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  ${submitStr}  |  Pág. 2 de 2`,W/2,H-1.8,{align:"center"});
 
   doc.save(`quiniela-2026-${p.name.toLowerCase().replace(/\s+/g,"-")}.pdf`);
 }
