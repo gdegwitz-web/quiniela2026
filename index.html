@@ -1185,8 +1185,8 @@ function pgMyScore(pid){
           const qn2=STATE.predictions[mid]?.quinName||mp?.name||"—";
           const pts=lgScore(mid);
           const isMe=mid===pid;
-          return {qn:qn2,pts,isMe};
-        }).sort((a,b)=>b.pts-a.pts);
+          return {qn:qn2,pts,isMe,hidden:mp?.hidden||false};
+        }).filter(r=>!r.hidden||r.isMe).sort((a,b)=>b.pts-a.pts);
         const myPos=rows.findIndex(r=>r.isMe);
         return `<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,200,0,.18);border-radius:12px;margin:.6rem 0;overflow:hidden">
           <div style="background:rgba(255,200,0,.09);padding:.6rem .85rem;border-bottom:1px solid rgba(255,200,0,.14)">
@@ -1259,8 +1259,9 @@ function lgRankHTML(lg, myPid){
       const p=STATE.participants.find(x=>x.id===pid);
       const qn=STATE.predictions[pid]?.quinName||p?.name||"—";
       const sub=STATE.predictions[pid]?.submitted||false;
-      return {pid, qn, name:p?.name||"—", pts:lgScore(pid), isMe:pid===myPid, sub};
+      return {pid, qn, name:p?.name||"—", pts:lgScore(pid), isMe:pid===myPid, sub, hidden:p?.hidden||false};
     })
+    .filter(m=>!m.hidden||m.isMe) // hidden participants invisible except to themselves
     .sort((a,b)=>b.pts-a.pts||a.qn.localeCompare(b.qn));
 
   return `<div style="display:flex;flex-direction:column;gap:.22rem">
@@ -1328,13 +1329,15 @@ function pgLeague(lid, pid){
   // Store share text for copy button (avoid inline quotes issues)
   window._lgShareText="Únete a mi liga "+lg.name+" - Quiniela FIFA 2026\nCódigo: "+lg.code+"\n"+appUrl;
 
+  const visibleCount=lg.memberIds.filter(mid=>{const p=STATE.participants.find(x=>x.id===mid);return !p?.hidden;}).length;
+
   return `
   <div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;gap:.6rem;margin:0 -.8rem .8rem">
     <button onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})"
       style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#ccc;border-radius:7px;padding:.3rem .65rem;font-size:.75rem;cursor:pointer;flex-shrink:0">← Atrás</button>
     <div style="flex:1;min-width:0">
       <div style="font-size:1rem;font-weight:700;color:#ffc800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lg.name}</div>
-      <div style="font-size:.65rem;color:#889">${lg.memberIds.length} participante${lg.memberIds.length!==1?"s":""} · Código: <span class="league-code">${lg.code}</span></div>
+      <div style="font-size:.65rem;color:#889">${visibleCount} participante${visibleCount!==1?"s":""} · Código: <span class="league-code">${lg.code}</span></div>
     </div>
   </div>
 
@@ -1520,8 +1523,8 @@ function pgAdmin(tab){
       const medals=["🥇","🥈","🥉"];
       const scored=lg.memberIds.map(pid=>{
         const p=STATE.participants.find(x=>x.id===pid);
-        return {name:p?.name||"—",qn:STATE.predictions[pid]?.quinName||p?.name||"—",pts:lgScore(pid)};
-      }).sort((a,b)=>b.pts-a.pts);
+        return {name:p?.name||"—",qn:STATE.predictions[pid]?.quinName||p?.name||"—",pts:lgScore(pid),hidden:p?.hidden||false};
+      }).filter(r=>!r.hidden).sort((a,b)=>b.pts-a.pts);
       return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:11px;margin-bottom:.75rem;overflow:hidden">
         <div style="display:flex;align-items:center;gap:.55rem;padding:.65rem .85rem;background:rgba(255,200,0,.06);border-bottom:1px solid rgba(255,200,0,.1)">
           <div style="flex:1;min-width:0">
