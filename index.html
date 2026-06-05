@@ -125,6 +125,10 @@ button:hover{opacity:.85}
 
 <script>
 const ADMIN_PWD="Mundial2026!";
+
+// ── Registration closes when the tournament starts ──
+// June 11, 2026 at 12:00 PM Eastern Time (16:00 UTC)
+const REGISTRATION_DEADLINE=new Date("2026-06-11T16:00:00Z");
 const GROUPS={
   A:["México","Corea del Sur","Sudáfrica","Chequia"],
   B:["Canadá","Bosnia-Herz.","Qatar","Suiza"],
@@ -756,8 +760,18 @@ function pgLanding(){
   const activeP=activePid?STATE.participants.find(x=>x.id===activePid):null;
   const activePred=activePid?STATE.predictions[activePid]:null;
   const isSubmitted=activePred?.submitted;
+  const registrationClosed=new Date()>=REGISTRATION_DEADLINE;
 
-  // Build session banner if logged in — no auto-redirect, user taps to continue
+  // If registration is closed and no active session → go directly to login
+  if(registrationClosed && !activeP){
+    setTimeout(function(){ go("returning"); }, 0);
+    return heroHTML()+`<div style="text-align:center;padding:1.5rem">
+      <div style="font-size:.85rem;color:#ffc800;margin-bottom:.4rem">⏰ El registro está cerrado</div>
+      <div style="font-size:.75rem;color:#889">El torneo ya comenzó. Si ya tienes una quiniela, ingresa a continuación.</div>
+    </div>`;
+  }
+
+  // Build session banner if logged in
   const sessionBanner=activeP&&activePred?`
   <div style="background:rgba(0,200,83,.08);border:1px solid rgba(0,200,83,.3);border-radius:12px;padding:.9rem 1rem;margin-bottom:.9rem">
     <div style="display:flex;align-items:center;gap:.7rem">
@@ -777,7 +791,19 @@ function pgLanding(){
     </button>
   </div>`:"";
 
-  return sessionBanner+heroHTML()+`
+  // Choices card — hide SOY NUEVO when registration is closed
+  const choicesCard=registrationClosed?`
+  <div class="card">
+    <h2>INGRESAR A MI QUINIELA</h2>
+    <div style="background:rgba(255,150,0,.07);border:1px solid rgba(255,150,0,.2);border-radius:8px;padding:.6rem .8rem;margin-bottom:.7rem;font-size:.75rem;color:#ffaa44;text-align:center">
+      ⏰ Registro cerrado — el torneo ya comenzó
+    </div>
+    <button class="cbtn ret" onclick="go('returning')" style="width:100%;padding:1rem">
+      <span class="ico">🔑</span>YA TENGO QUINIELA
+      <span style="font-weight:400;font-size:.7rem;color:#ffc80099">Iniciar sesión</span>
+    </button>
+    <button class="btn-purple" onclick="go('admin_login')" style="margin-top:.5rem">⚙️ Acceso Administrador</button>
+  </div>`:`
   <div class="card">
     <h2>¿CÓMO QUIERES CONTINUAR?</h2>
     <div class="choice">
@@ -785,9 +811,9 @@ function pgLanding(){
       <button class="cbtn ret" onclick="go('returning')"><span class="ico">🔑</span>YA TENGO QUINIELA<span style="font-weight:400;font-size:.7rem;color:#ffc80099">Iniciar sesión</span></button>
     </div>
     <button class="btn-purple" onclick="go('admin_login')">⚙️ Acceso Administrador</button>
-  </div>
+  </div>`;
 
-  <!-- ── SCORING GUIDE ── -->
+  return sessionBanner+heroHTML()+choicesCard+`
   <div style="background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.14);border-radius:14px;overflow:hidden;margin-bottom:.9rem">
     <div style="background:rgba(255,200,0,.1);padding:.7rem .9rem;display:flex;align-items:center;gap:.5rem">
       <span style="font-size:1.2rem">🏆</span>
