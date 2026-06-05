@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Quiniela FIFA 2026</title>
 
+<!-- EmailJS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>emailjs.init("SZT-oRJTZePUtJiwj");</script>
+
 <!-- PWA: app name and colors -->
 <meta name="application-name" content="Quiniela 2026">
 <meta name="description" content="Quiniela FIFA World Cup 2026 - USA · Canada · Mexico">
@@ -1740,7 +1744,75 @@ function submitPrediction(pid){
   STATE.predictions[pid].submitted=true;
   STATE.predictions[pid].submittedAt=new Date().toISOString();
   go("myscore",{pid});
-  setTimeout(function(){ persist(); showFlash("✓ Quiniela enviada!"); }, 50);
+  setTimeout(function(){
+    persist();
+    showFlash("✓ Quiniela enviada!");
+    // Send confirmation email in background
+    sendConfirmationEmail(pid);
+  },50);
+}
+
+function sendConfirmationEmail(pid){
+  const p=STATE.participants.find(x=>x.id===pid);
+  const pred=STATE.predictions[pid]||{};
+  if(!p||!p.email) return;
+
+  // Build bracket summary for email
+  const B=buildBracket(pred.groups||{},pred.ko||{});
+  const champion=B.champion||"—";
+  const runner=B.fin&&B.champion?(B.fin.h===B.champion?B.fin.a:B.fin.h)||"—":"—";
+  const third=B.f3w&&B.f3w[0]?B.f3w[0]:"—";
+
+  // Submission date/time
+  const submittedAt=pred.submittedAt?new Date(pred.submittedAt):new Date();
+  const submitStr=submittedAt.toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
+    +" "+submittedAt.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
+
+  // Generate PDF as base64
+  if(!window.jspdf?.jsPDF){
+    console.warn("jsPDF not ready, sending email without attachment");
+    sendEmail(pid,p,pred,champion,runner,third,submitStr,null);
+    return;
+  }
+
+  // Use jsPDF output as base64 datauristring
+  try{
+    const {jsPDF}=window.jspdf;
+    const tempPid=pid; // capture
+    // Generate PDF silently (same as genPDF but return base64 instead of saving)
+    const doc=buildPDFDoc(pid);
+    if(!doc){sendEmail(pid,p,pred,champion,runner,third,submitStr,null);return;}
+    const pdfBase64=doc.output("datauristring"); // data:application/pdf;base64,...
+    sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64);
+  }catch(e){
+    console.warn("PDF generation for email failed:",e);
+    sendEmail(pid,p,pred,champion,runner,third,submitStr,null);
+  }
+}
+
+function sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64){
+  const params={
+    to_email:     p.email,
+    from_name:    p.name,
+    from_email:   p.email,
+    quinName:     pred.quinName||"Mi Quiniela",
+    submitted_at: submitStr,
+    champion:     champion,
+    runner_up:    runner,
+    third_place:  third,
+    admin_email:  "gdegwitz@gmail.com",
+  };
+  if(pdfBase64) params.pdf_content=pdfBase64;
+
+  emailjs.send("service_tl7ami5","template_748pynh",params)
+    .then(function(){
+      console.log("✅ Email enviado a "+p.email);
+      showFlash("📧 Confirmación enviada a "+p.email);
+    })
+    .catch(function(e){
+      console.warn("Email failed:",e);
+      // Silent fail — don't alert user, submission already confirmed
+    });
 }
 
 function pickBracket(pid,round,matchId,team){
@@ -1826,11 +1898,11 @@ function resetAll(){
 }
 
 // ── PDF GENERATION (2 pages, landscape A4) ─────────────
-function genPDF(pid){
-  if(!window.jspdf?.jsPDF){alert("PDF no disponible. Recarga la página.");return}
+function buildPDFDoc(pid){
+  if(!window.jspdf?.jsPDF) return null;
   const {jsPDF}=window.jspdf;
   const p=STATE.participants.find(x=>x.id===pid);
-  if(!p)return;
+  if(!p) return null;
   const pred=STATE.predictions[pid]||{};
   const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
   const W=297,H=210,M=8;
@@ -2120,6 +2192,13 @@ function genPDF(pid){
   col(180,190,210);font("normal",4);
   doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  ${submitStr}  |  Pág. 2 de 2`,W/2,H-1.8,{align:"center"});
 
+  return doc;
+}
+
+function genPDF(pid){
+  const doc=buildPDFDoc(pid);
+  if(!doc){alert("PDF no disponible. Recarga la página.");return;}
+  const p=STATE.participants.find(x=>x.id===pid);
   doc.save(`quiniela-2026-${p.name.toLowerCase().replace(/\s+/g,"-")}.pdf`);
 }
 
