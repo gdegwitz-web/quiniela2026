@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Quiniela FIFA 2026</title>
+
+<!-- PWA: app name and colors -->
+<meta name="application-name" content="Quiniela 2026">
+<meta name="description" content="Quiniela FIFA World Cup 2026 - USA · Canada · Mexico">
+<meta name="theme-color" content="#141824">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- iOS specific -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Quiniela 2026">
+<link rel="apple-touch-icon" href="https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png">
+
+<!-- Android / Chrome manifest inline via JS -->
+<link rel="manifest" href="data:application/json;charset=utf-8,{
+  %22name%22:%22Quiniela%20FIFA%202026%22,
+  %22short_name%22:%22Quiniela%202026%22,
+  %22description%22:%22Quiniela%20FIFA%20World%20Cup%202026%22,
+  %22start_url%22:%22.%22,
+  %22display%22:%22standalone%22,
+  %22background_color%22:%22%23141824%22,
+  %22theme_color%22:%22%23141824%22,
+  %22icons%22:[{%22src%22:%22https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22}]
+}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -2093,6 +2117,29 @@ function genPDF(pid){
 
 // ── BOOT ──────────────────────────────────────────────
 renderApp();
+
+// ── iOS install prompt ──
+window.addEventListener("load",function(){
+  const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone=window.matchMedia("(display-mode:standalone)").matches||window.navigator.standalone;
+  const dismissed=localStorage.getItem("pwa-prompt-dismissed");
+  if(isIos&&!isStandalone&&!dismissed){
+    const banner=document.createElement("div");
+    banner.id="ios-install-banner";
+    banner.style.cssText="position:fixed;bottom:0;left:0;right:0;background:#1a2236;border-top:1px solid rgba(255,200,0,.3);padding:.8rem 1rem;z-index:1000;display:flex;align-items:center;gap:.7rem;font-family:Arial,sans-serif";
+    banner.innerHTML=`
+      <span style="font-size:1.6rem">⚽</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.82rem;font-weight:700;color:#ffc800">Agregar a pantalla de inicio</div>
+        <div style="font-size:.7rem;color:#aaa">Toca <strong style="color:#fff">Compartir</strong> 
+        <span style="font-size:.85rem">⬆️</span> y luego <strong style="color:#fff">"Agregar a inicio"</strong></div>
+      </div>
+      <button onclick="document.getElementById('ios-install-banner').remove();localStorage.setItem('pwa-prompt-dismissed','1')"
+        style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer;padding:0;width:auto;flex-shrink:0">✕</button>
+    `;
+    document.body.appendChild(banner);
+  }
+});
 </script>
 
 <!-- Firebase loaded AFTER app boots — guaranteed available when initFirebase() runs -->
