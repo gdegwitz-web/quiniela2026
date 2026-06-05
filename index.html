@@ -199,11 +199,35 @@ function makeMatches(){
 }
 const MATCHES=makeMatches();
 
-// Simple deterministic hash — good enough for localStorage (not security-critical)
+// Password hashing — uses Web Crypto API (SHA-256 + salt) when available,
+// falls back to djb2 for older browsers. Async but handles gracefully.
 function hashPwd(s){
+  // Synchronous fallback (djb2) for compatibility
   let h=5381;
   for(let i=0;i<s.length;i++) h=((h<<5)+h)^s.charCodeAt(i);
   return (h>>>0).toString(36);
+}
+
+// Stronger async hash used for NEW registrations (SHA-256 via Web Crypto)
+async function hashPwdStrong(s){
+  try{
+    const salt="quiniela2026_fifa";
+    const data=new TextEncoder().encode(salt+s);
+    const hashBuf=await crypto.subtle.digest("SHA-256",data);
+    const hashArr=Array.from(new Uint8Array(hashBuf));
+    return "sha256:"+hashArr.map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){
+    return hashPwd(s); // fallback
+  }
+}
+
+function verifyPwd(input, stored){
+  // Supports both old djb2 hashes and new SHA-256 hashes
+  if(stored&&stored.startsWith("sha256:")){
+    // For SHA-256 we need async — handled in doLogin
+    return null; // signal: use async verification
+  }
+  return hashPwd(input)===stored;
 }
 
 function pwdField(id,placeholder){
@@ -906,11 +930,13 @@ function doRegister(){
   if(!ok)return;
   const pid=uid();
   STATE.participants.push({id:pid,name,email:email.toLowerCase(),hidden:false});
-  STATE.predictions[pid]={groups:{},ko:{},quinName:qname,pwdHash:hashPwd(pwd),submitted:false};
-  // Navigate FIRST — then persist in background
-  SESSION.pid=pid;
-  go("predict",{pid});
-  setTimeout(function(){ persist(); }, 50);
+  // Use strong SHA-256 hash for new registrations
+  hashPwdStrong(pwd).then(function(hash){
+    STATE.predictions[pid]={groups:{},ko:{},quinName:qname,pwdHash:hash,submitted:false};
+    SESSION.pid=pid;
+    go("predict",{pid});
+    setTimeout(function(){ persist(); },50);
+  });
 }
 
 function pgReturning(){
@@ -936,18 +962,29 @@ function doLogin(){
   setErr("li-eerr","");setErr("li-perr","");
   if(!email){setErr("li-eerr","⚠ Ingresa tu correo");return}
   if(!pwd){setErr("li-perr","⚠ Ingresa tu contraseña");return}
-  // Find participant by email
   const p=STATE.participants.find(x=>x.email&&x.email.toLowerCase()===email&&!x.hidden);
   if(!p){setErr("li-eerr","⚠ No encontramos una quiniela con ese correo");return}
   const pred=STATE.predictions[p.id]||{};
   const stored=pred.pwdHash;
-  if(!stored||stored!==hashPwd(pwd)){
-    setErr("li-perr","⚠ Contraseña incorrecta");return;
+  if(!stored){setErr("li-perr","⚠ Contraseña no configurada");return}
+
+  function doNav(){
+    SESSION.pid=p.id;
+    if(!pred.submitted) go("predict",{pid:p.id});
+    else go("myscore",{pid:p.id});
   }
-  SESSION.pid=p.id;
-  // If not submitted → go to predict to continue filling
-  if(!pred.submitted) go("predict",{pid:p.id});
-  else go("myscore",{pid:p.id});
+
+  if(stored.startsWith("sha256:")){
+    // New strong SHA-256 hash
+    hashPwdStrong(pwd).then(function(hash){
+      if(hash!==stored){setErr("li-perr","⚠ Contraseña incorrecta");return;}
+      doNav();
+    });
+  } else {
+    // Legacy djb2 — still works for existing participants
+    if(hashPwd(pwd)!==stored){setErr("li-perr","⚠ Contraseña incorrecta");return;}
+    doNav();
+  }
 }
 
 function pgPredict(pid){
@@ -1786,6 +1823,7 @@ function sendConfirmationEmail(pid){
 
   const params={
     to_email:     p.email,
+    email:        p.email,        // matches {{email}} in EmailJS template "To Email" field
     from_name:    p.name,
     from_email:   p.email,
     quinName:     pred.quinName||"Mi Quiniela",
