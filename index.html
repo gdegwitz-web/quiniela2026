@@ -1171,16 +1171,14 @@ function pgPredict(pid){
 }
 
 function hoyTab(pid,pred){
-  // Get today's date in "Jun 11" format matching MATCHES
-  const now=new Date();
+  // DEV SIMULATION: force date to Jun 13 for testing (remove before launch)
+  const _simDate=window._simDate||null;
+  const now=_simDate?new Date(_simDate):new Date();
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const todayStr=months[now.getMonth()]+" "+now.getDate();
-
-  // Find today's matches
   const todayMatches=MATCHES.filter(m=>m.date===todayStr);
 
   if(todayMatches.length===0){
-    // Check if tournament hasn't started or has ended
     const allDates=[...new Set(MATCHES.map(m=>m.date))];
     return `<div style="text-align:center;padding:1.5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:.5rem 0">
       <div style="font-size:2rem;margin-bottom:.5rem">📅</div>
@@ -1189,7 +1187,73 @@ function hoyTab(pid,pred){
     </div>`;
   }
 
-  // Calculate daily points
+  // ── Get all participants in same leagues as this user ──
+  const myLeagues=STATE.leagues.filter(l=>l.memberIds.includes(pid));
+  // Collect all league-mates (union of all leagues, excluding hidden)
+  const leagueMateIds=[...new Set(
+    myLeagues.flatMap(l=>l.memberIds)
+      .filter(id=>{
+        const p2=STATE.participants.find(x=>x.id===id);
+        return !p2?.hidden && STATE.predictions[id]?.submitted;
+      })
+  )];
+  const hasLeague=leagueMateIds.length>1;
+
+  // ── Per-match consensus stats ──
+  function matchStats(mid){
+    if(!hasLeague) return null;
+    const preds=leagueMateIds
+      .map(id=>STATE.predictions[id]?.groups?.[mid])
+      .filter(s=>s&&s.h!==""&&s.a!=="");
+    if(preds.length===0) return null;
+    const total=preds.length;
+
+    // Count results: h=local wins, a=away wins, d=draw
+    let hWins=0,aWins=0,draws=0;
+    const scoreCount={};
+    preds.forEach(s=>{
+      const h=parseInt(s.h),a=parseInt(s.a);
+      if(h>a) hWins++;
+      else if(h<a) aWins++;
+      else draws++;
+      const key=s.h+"-"+s.a;
+      scoreCount[key]=(scoreCount[key]||0)+1;
+    });
+
+    // Most common score
+    const topScore=Object.entries(scoreCount).sort((a,b)=>b[1]-a[1])[0];
+    const topScoreStr=topScore?topScore[0]:null;
+    const topScoreCount=topScore?topScore[1]:0;
+    const topScorePct=Math.round(topScoreCount/total*100);
+
+    return {
+      total,
+      hPct:Math.round(hWins/total*100),
+      dPct:Math.round(draws/total*100),
+      aPct:Math.round(aWins/total*100),
+      topScore:topScoreStr,
+      topScorePct,
+      topScoreCount,
+    };
+  }
+
+  // ── Progress bar helper ──
+  function pctBar(hPct,dPct,aPct,hTeam,aTeam){
+    return `<div style="margin-top:.55rem">
+      <div style="display:flex;border-radius:5px;overflow:hidden;height:6px;gap:1px">
+        ${hPct>0?`<div style="background:#4de0a0;width:${hPct}%;transition:width .4s"></div>`:""}
+        ${dPct>0?`<div style="background:#ffc800;width:${dPct}%;transition:width .4s"></div>`:""}
+        ${aPct>0?`<div style="background:#88aaff;width:${aPct}%;transition:width .4s"></div>`:""}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:.25rem;font-size:.62rem;color:#889">
+        <span style="color:#4de0a0">${f(hTeam)} ${hPct}%</span>
+        <span style="color:#ffc800">Empate ${dPct}%</span>
+        <span style="color:#88aaff">${aPct}% ${f(aTeam)}</span>
+      </div>
+    </div>`;
+  }
+
+  // ── Build match rows ──
   let dayPts=0;
   const matchRows=todayMatches.map(m=>{
     const pr=pred.groups?.[m.id];
@@ -1213,10 +1277,8 @@ function hoyTab(pid,pred){
       }
       dayPts+=pts;
     } else if(ac&&ac.h!==""&&ac.a!==""){
-      // Match played but no prediction
       badge=`<span style="color:#667;font-size:.7rem">Sin predicción</span>`;
     } else if(pr&&pr.h!==""&&pr.a!==""){
-      // Prediction exists, match not yet played
       badge=`<span style="color:#889;font-size:.7rem">Pendiente</span>`;
       status="pending";
     }
@@ -1224,23 +1286,41 @@ function hoyTab(pid,pred){
     const borderCol=status==="exact"?"rgba(0,200,83,.35)":status==="win"?"rgba(0,128,255,.35)":status==="miss"?"rgba(255,100,100,.2)":"rgba(255,255,255,.08)";
     const bgCol=status==="exact"?"rgba(0,200,83,.07)":status==="win"?"rgba(0,128,255,.06)":status==="miss"?"rgba(255,100,100,.05)":"rgba(255,255,255,.04)";
 
+    const stats=matchStats(m.id);
+
     return `<div style="background:${bgCol};border:1px solid ${borderCol};border-radius:9px;padding:.6rem .75rem;margin:.3rem 0">
+
+      <!-- Match header -->
       <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.4rem;margin-bottom:.35rem">
-        <div style="font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:.3rem">${f(m.h)} ${trunc(m.h,10)}</div>
+        <div style="font-size:.78rem;font-weight:600">${f(m.h)} ${trunc(m.h,10)}</div>
         <div style="text-align:center">
           ${ac&&ac.h!==""
             ? "<div style=\"font-size:.95rem;font-weight:700;color:#eee\">"+ac.h+":"+ac.a+"</div><div style=\"font-size:.6rem;color:#667\">resultado</div>"
             : "<div style=\"font-size:.75rem;color:#556\">vs</div>"
           }
         </div>
-        <div style="font-size:.78rem;font-weight:600;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:.3rem">${trunc(m.a,10)} ${f(m.a)}</div>
+        <div style="font-size:.78rem;font-weight:600;text-align:right">${trunc(m.a,10)} ${f(m.a)}</div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem">
+
+      <!-- My prediction + points -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding-bottom:${stats?".45rem":".0rem"}">
         <div style="font-size:.72rem;color:#889">
           Mi predicción: <strong style="color:${pr&&pr.h!==""?"#eee":"#556"}">${pr&&pr.h!==""?pr.h+":"+pr.a:"—"}</strong>
         </div>
         <div>${badge}</div>
       </div>
+
+      <!-- League consensus (only if in a league with submitted players) -->
+      ${stats?`
+      <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.45rem;margin-top:.0rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
+          <span style="font-size:.65rem;color:#667;letter-spacing:.5px">CONSENSO DE TU LIGA (${stats.total} quinielas)</span>
+          ${stats.topScore?`<span style="font-size:.65rem;background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.2);border-radius:4px;padding:.1rem .4rem">
+            Marcador más votado: <strong>${stats.topScore}</strong> (${stats.topScorePct}%)
+          </span>`:""}
+        </div>
+        ${pctBar(stats.hPct,stats.dPct,stats.aPct,m.h,m.a)}
+      </div>`:""}
     </div>`;
   });
 
@@ -1257,6 +1337,7 @@ function hoyTab(pid,pred){
       <div style="font-size:.6rem;color:#889">pts hoy</div>
     </div>`:""}
   </div>
+  ${!hasLeague?`<div style="font-size:.7rem;color:#667;margin-bottom:.5rem;text-align:center;font-style:italic">Únete a una liga para ver el consenso de los demás participantes</div>`:""}
   ${matchRows.join("")}`;
 }
 
@@ -1558,7 +1639,7 @@ function pgAdmin(tab){
   <div style="background:rgba(124,58,237,.08);border-bottom:1px solid rgba(124,58,237,.2);padding:.65rem .8rem;margin:0 -.8rem .8rem;display:flex;align-items:center">
     <div><div style="font-size:1rem;font-weight:700;color:#c084fc">⚙️ PANEL ADMIN</div>
     <div style="font-size:.62rem;color:#7c3aed;letter-spacing:1px">FIFA WORLD CUP 2026</div></div>
-    <button class="btn-gray" style="width:auto;margin-left:auto;font-size:.72rem;padding:.28rem .65rem" onclick="go('leaderboard')">📊 POSICIONES</button>
+    <button class="btn-gray" style="width:auto;margin-left:auto;font-size:.72rem;padding:.28rem .65rem" onclick="go('leaderboard',{from:'admin'})">📊 POSICIONES</button>
   </div>
   <div class="tabs">
     <button class="tab${tab==="results"?" on":""}" onclick="go('admin',{tab:'results'})">⚽ RESULTADOS</button>
@@ -1693,10 +1774,12 @@ function pgLeaderboard(tab){
   const medals=["🥇","🥈","🥉"];
   const sel=ROUTE.sel||null;
   const grp=ROUTE.grp||"A";
+  const fromAdmin=ROUTE.from==="admin";
   return `<div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;margin:0 -.8rem .8rem">
     <div style="flex:1"><div style="font-size:1rem;font-weight:700;color:#ffc800">🏆 POSICIONES</div>
     <div style="font-size:.68rem;color:#889">FIFA World Cup 2026</div></div>
-    <button class="btn-gray" style="width:auto;font-size:.72rem;padding:.28rem .65rem" onclick="go('landing')">← Inicio</button>
+    <button class="btn-gray" style="width:auto;font-size:.72rem;padding:.28rem .65rem"
+      onclick="go('${fromAdmin?"admin":"landing"}')">← ${fromAdmin?"Admin":"Inicio"}</button>
   </div>
   <div class="tabs">
     <button class="tab${tab==="global"?" on":""}" onclick="go('leaderboard',{tab:'global'})">GLOBAL</button>
