@@ -1794,6 +1794,12 @@ function sendConfirmationEmail(pid){
   const pred=STATE.predictions[pid]||{};
   if(!p||!p.email) return;
 
+  // Rate limit: only send once per participant
+  if(pred.emailSent){ console.log("Email already sent, skipping"); return; }
+
+  // Basic email validation
+  if(!p.email.includes("@")||!p.email.includes(".")) return;
+
   const B=buildBracket(pred.groups||{},pred.ko||{});
   const champion=B.champion||"—";
   const runner=B.fin&&B.champion?(B.fin.h===B.champion?B.fin.a:B.fin.h)||"—":"—";
@@ -1842,6 +1848,9 @@ function sendConfirmationEmail(pid){
   emailjs.send("service_tl7ami5","template_748pynh",params)
     .then(function(){
       console.log("✅ Email enviado a "+p.email);
+      // Mark as sent — prevents duplicate sends
+      STATE.predictions[pid].emailSent=true;
+      localStorage.setItem(LS,JSON.stringify(STATE));
       showFlash("📧 Confirmación enviada a "+p.email);
     })
     .catch(function(e){
