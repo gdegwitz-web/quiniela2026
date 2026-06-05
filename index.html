@@ -729,19 +729,27 @@ function pgLanding(){
   const activePred=activePid?STATE.predictions[activePid]:null;
   const isSubmitted=activePred?.submitted;
 
-  // Auto-redirect if session is active and participant exists
-  if(activeP && activePred){
-    // Use setTimeout to avoid render-during-render
-    setTimeout(function(){
-      go(isSubmitted?"myscore":"predict",{pid:activePid});
-    },0);
-    return `<div style="text-align:center;padding:3rem">
-      <div style="font-size:2rem;margin-bottom:.5rem">⚽</div>
-      <div style="color:#ffc800;font-size:.9rem">Cargando tu quiniela...</div>
-    </div>`;
-  }
+  // Build session banner if logged in — no auto-redirect, user taps to continue
+  const sessionBanner=activeP&&activePred?`
+  <div style="background:rgba(0,200,83,.08);border:1px solid rgba(0,200,83,.3);border-radius:12px;padding:.9rem 1rem;margin-bottom:.9rem">
+    <div style="display:flex;align-items:center;gap:.7rem">
+      <span style="font-size:1.6rem">⚽</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.95rem;color:#4de0a0">${activeP.name}</div>
+        <div style="font-size:.7rem;color:#889">"${activePred.quinName||"Mi Quiniela"}" · Sesión activa</div>
+      </div>
+    </div>
+    <button onclick="go('${isSubmitted?"myscore":"predict"}',{pid:'${activePid}'})"
+      style="display:block;width:100%;margin-top:.7rem;padding:.7rem;background:#00c853;color:#fff;border:none;border-radius:8px;font-size:.92rem;font-weight:700;cursor:pointer">
+      ${isSubmitted?"▶ VER MI QUINIELA Y PUNTAJE":"▶ CONTINUAR LLENANDO MI QUINIELA"}
+    </button>
+    <button onclick="logout()"
+      style="display:block;width:100%;margin-top:.35rem;padding:.45rem;background:none;color:rgba(255,255,255,.3);border:none;font-size:.72rem;cursor:pointer">
+      Cerrar sesión
+    </button>
+  </div>`:"";
 
-  return heroHTML()+`
+  return sessionBanner+heroHTML()+`
   <div class="card">
     <h2>¿CÓMO QUIERES CONTINUAR?</h2>
     <div class="choice">
