@@ -1757,40 +1757,33 @@ function sendConfirmationEmail(pid){
   const pred=STATE.predictions[pid]||{};
   if(!p||!p.email) return;
 
-  // Build bracket summary for email
   const B=buildBracket(pred.groups||{},pred.ko||{});
   const champion=B.champion||"—";
   const runner=B.fin&&B.champion?(B.fin.h===B.champion?B.fin.a:B.fin.h)||"—":"—";
   const third=B.f3w&&B.f3w[0]?B.f3w[0]:"—";
 
-  // Submission date/time
   const submittedAt=pred.submittedAt?new Date(pred.submittedAt):new Date();
   const submitStr=submittedAt.toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
     +" "+submittedAt.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
 
-  // Generate PDF as base64
-  if(!window.jspdf?.jsPDF){
-    console.warn("jsPDF not ready, sending email without attachment");
-    sendEmail(pid,p,pred,champion,runner,third,submitStr,null);
-    return;
-  }
+  // ── Build groups summary (all 72 matches) ──
+  const groupsLines=Object.keys(GROUPS).map(gk=>{
+    const gm=MATCHES.filter(m=>m.g===gk);
+    const rows=gm.map(m=>{
+      const s=pred.groups?.[m.id];
+      const score=s&&s.h!==""&&s.a!==""?s.h+"-"+s.a:"?-?";
+      return trunc(m.h,10)+" "+score+" "+trunc(m.a,10);
+    }).join(" | ");
+    return "Grupo "+gk+": "+rows;
+  }).join("\n");
 
-  // Use jsPDF output as base64 datauristring
-  try{
-    const {jsPDF}=window.jspdf;
-    const tempPid=pid; // capture
-    // Generate PDF silently (same as genPDF but return base64 instead of saving)
-    const doc=buildPDFDoc(pid);
-    if(!doc){sendEmail(pid,p,pred,champion,runner,third,submitStr,null);return;}
-    const pdfBase64=doc.output("datauristring"); // data:application/pdf;base64,...
-    sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64);
-  }catch(e){
-    console.warn("PDF generation for email failed:",e);
-    sendEmail(pid,p,pred,champion,runner,third,submitStr,null);
-  }
-}
+  // ── Build bracket summary by round ──
+  const r32w=B.r32w||{}, r16w=B.r16w||{}, qfw=B.qfw||{}, sfw=B.sfw||{};
+  const r32teams=Object.values(r32w).filter(Boolean).join(", ")||"—";
+  const r16teams=Object.values(r16w).filter(Boolean).join(", ")||"—";
+  const qfteams=Object.values(qfw).filter(Boolean).join(", ")||"—";
+  const sfteams=Object.values(sfw).filter(Boolean).join(", ")||"—";
 
-function sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64){
   const params={
     to_email:     p.email,
     from_name:    p.name,
@@ -1801,8 +1794,12 @@ function sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64){
     runner_up:    runner,
     third_place:  third,
     admin_email:  "gdegwitz@gmail.com",
+    groups_summary: groupsLines,
+    r32_teams:    r32teams,
+    r16_teams:    r16teams,
+    qf_teams:     qfteams,
+    sf_teams:     sfteams,
   };
-  if(pdfBase64) params.pdf_content=pdfBase64;
 
   emailjs.send("service_tl7ami5","template_748pynh",params)
     .then(function(){
@@ -1811,7 +1808,6 @@ function sendEmail(pid,p,pred,champion,runner,third,submitStr,pdfBase64){
     })
     .catch(function(e){
       console.warn("Email failed:",e);
-      // Silent fail — don't alert user, submission already confirmed
     });
 }
 
