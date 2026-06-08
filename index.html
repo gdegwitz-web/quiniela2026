@@ -1038,7 +1038,18 @@ function buildBracket(groups,ko){
 const LS="q2026";
 
 // 1. Load instantly from localStorage — app starts immediately
-let STATE=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
+let STATE=(function(){
+  const s=JSON.parse(localStorage.getItem(LS)||"null")||{participants:[],predictions:{},actuals:{},leagues:[]};
+  // Ensure leagues.memberIds are always arrays (Firebase can convert arrays to objects)
+  if(s.leagues&&Array.isArray(s.leagues)){
+    s.leagues=s.leagues.map(function(lg){
+      return Object.assign({},lg,{
+        memberIds:lg.memberIds?(Array.isArray(lg.memberIds)?lg.memberIds:Object.values(lg.memberIds)):[]
+      });
+    });
+  }
+  return s;
+})();
 if(!STATE.leagues) STATE.leagues=[];
 
 window._fbDB=null;
@@ -1085,8 +1096,17 @@ function initFirebase(){
         delete actClean._resetAt;
         STATE.actuals=actClean;
       }
-      if(val.leagues)      STATE.leagues=Object.values(val.leagues);
-      if(!STATE.leagues)   STATE.leagues=[];
+      if(val.leagues){
+        STATE.leagues=Object.values(val.leagues).map(function(lg){
+          return Object.assign({},lg,{
+            memberIds: lg.memberIds
+              ? (Array.isArray(lg.memberIds) ? lg.memberIds : Object.values(lg.memberIds))
+              : []
+          });
+        });
+      } else {
+        STATE.leagues=[];
+      }
       localStorage.setItem(LS,JSON.stringify(STATE));
       // On first Firebase load (e.g. incognito), refresh the page so data appears
       if(!window._fbLoaded){
