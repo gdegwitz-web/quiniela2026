@@ -1,0 +1,19 @@
+{
+  "name": "Quiniela FIFA 2026",
+  "short_name": "Quiniela 2026",
+  "description": "Quiniela FIFA World Cup 2026 - USA · Canada · Mexico",
+  "start_url": "/quiniela2026/",
+  "scope": "/quiniela2026/",
+  "display": "standalone",
+  "background_color": "#141824",
+  "theme_color": "#141824",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

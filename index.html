@@ -25,24 +25,43 @@
 <link rel="manifest" href="manifest.json">
 
 <script>
-// Capture install prompt for Android
+// Capture automatic install prompt if browser supports it
 window.addEventListener('beforeinstallprompt', function(e){
   e.preventDefault();
   window._pwaPrompt=e;
-  const btn=document.getElementById('pwa-install-btn');
-  if(btn) btn.style.display='block';
+  document.querySelectorAll('.pwa-install-btn').forEach(function(b){b.style.display='block';});
 });
 window.addEventListener('appinstalled', function(){
   window._pwaPrompt=null;
-  const btn=document.getElementById('pwa-install-btn');
-  if(btn) btn.style.display='none';
+  document.querySelectorAll('.pwa-install-btn').forEach(function(b){b.style.display='none';});
+  localStorage.setItem('pwa-installed','1');
 });
-// Unregister any existing service workers to prevent data issues
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(function(regs){
-    regs.forEach(function(reg){ reg.unregister(); });
-  });
-}
+
+// Show Android install banner if not already installed
+(function(){
+  if(localStorage.getItem('pwa-installed')) return;
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  const isChrome=/Chrome/i.test(navigator.userAgent)&&!/EdgA|OPR|SamsungBrowser/i.test(navigator.userAgent);
+  if(!isAndroid&&!isChrome) return;
+  // Show banner after short delay
+  setTimeout(function(){
+    if(window._pwaPrompt) return; // automatic prompt available, no need for banner
+    if(document.getElementById('android-install-banner')) return;
+    const banner=document.createElement('div');
+    banner.id='android-install-banner';
+    banner.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1a2540;border-top:1px solid rgba(255,200,0,.3);padding:.7rem 1rem;display:flex;align-items:center;gap:.7rem;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.4)';
+    banner.innerHTML=`
+      <img src="https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.82rem;color:#ffc800">Instalar Quiniela 2026</div>
+        <div style="font-size:.68rem;color:#889;margin-top:.1rem">Toca <strong style="color:#eee">⋮</strong> → <strong style="color:#eee">Agregar a pantalla de inicio</strong></div>
+      </div>
+      <button onclick="document.getElementById('android-install-banner').remove();localStorage.setItem('pwa-installed','1')"
+        style="background:none;border:none;color:#667;font-size:1.2rem;cursor:pointer;flex-shrink:0;padding:.2rem .4rem">✕</button>`;
+    document.body.appendChild(banner);
+  }, 2000);
+})();
+</script>
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
