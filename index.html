@@ -845,7 +845,7 @@ function pickAdminKO(round,matchId,team){
     delete STATE.actuals._ko[round][matchId];
   else
     STATE.actuals._ko[round][matchId]=team;
-  persist();
+  fbWriteActuals();
   showFlash("✓ "+team+" clasificado");
   go("admin",{tab:"results",grp:"KO"});
 }
@@ -855,7 +855,7 @@ function saveKOResult(round, idx, team){
   if(!STATE.actuals._ko[round]) STATE.actuals._ko[round]={};
   if(team) STATE.actuals._ko[round][idx]=team;
   else delete STATE.actuals._ko[round][idx];
-  persist();
+  fbWriteActuals();
 }
 
 // KO round scoring — compare participant's picks vs admin-confirmed winners
@@ -1150,59 +1150,87 @@ function initFirebase(){
   }
 }
 
-function persist(){
+// ── FIREBASE WRITE FUNCTIONS ─────────────────────────────
+// Each function writes ONLY its specific data — never touches other nodes
+
+// Write a single participant + their prediction to Firebase
+function fbWriteParticipant(pid){
   localStorage.setItem(LS,JSON.stringify(STATE));
-  showFlash("✓ Guardado");
-  if(!window._fbDB) return;
-
-  // ── SAFETY GUARD: never write to Firebase with empty STATE before it loads ──
-  const hasParticipants=(STATE.participants||[]).length>0;
-  const hasPredictions=Object.keys(STATE.predictions||{}).length>0;
-  if(!hasParticipants && !hasPredictions && !window._fbLoaded){
-    console.log("persist() skipped — waiting for Firebase to load");
-    return;
-  }
-
-  window._fbPaused=true;
-
-  // Build a deep-path update object so we NEVER overwrite sibling data
-  // e.g. "participants/pid1" updates only that participant, not the whole node
+  if(!window._fbDB||!pid) return;
+  const p=STATE.participants.find(function(x){return x.id===pid;});
+  const pred=STATE.predictions[pid];
   const updates={};
+  if(p)    updates["participants/"+pid]=p;
+  if(pred) updates["predictions/"+pid]=pred;
+  if(Object.keys(updates).length>0){
+    window._fbDB.ref("q2026").update(updates).catch(function(e){
+      console.warn("fbWriteParticipant failed:",e.message);
+    });
+  }
+}
 
+// Write ONLY actuals (match results) to Firebase — admin only
+function fbWriteActuals(){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  if(!window._fbDB) return;
+  window._fbDB.ref("q2026/actuals").set(STATE.actuals||{}).catch(function(e){
+    console.warn("fbWriteActuals failed:",e.message);
+  });
+}
+
+// Write a single league to Firebase
+function fbWriteLeague(lid){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  if(!window._fbDB||!lid) return;
+  const lg=STATE.leagues.find(function(x){return x.id===lid;});
+  if(lg) window._fbDB.ref("q2026/leagues/"+lid).set(lg).catch(function(e){
+    console.warn("fbWriteLeague failed:",e.message);
+  });
+}
+
+// Delete a single league from Firebase
+function fbDeleteLeague(lid){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  if(!window._fbDB||!lid) return;
+  window._fbDB.ref("q2026/leagues/"+lid).remove().catch(function(e){
+    console.warn("fbDeleteLeague failed:",e.message);
+  });
+}
+
+// Delete a participant + their prediction from Firebase
+function fbDeleteParticipant(pid){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  if(!window._fbDB||!pid) return;
+  const updates={};
+  updates["participants/"+pid]=null;
+  updates["predictions/"+pid]=null;
+  window._fbDB.ref("q2026").update(updates).catch(function(e){
+    console.warn("fbDeleteParticipant failed:",e.message);
+  });
+}
+
+// Write all admin-level data (participants + leagues, NOT actuals or predictions)
+function fbWriteAdmin(){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  if(!window._fbDB) return;
+  const updates={};
   (STATE.participants||[]).forEach(function(p){
     if(p&&p.id) updates["participants/"+p.id]=p;
   });
-
-  Object.entries(STATE.predictions||{}).forEach(function(e){
-    if(e[0]&&e[1]) updates["predictions/"+e[0]]=e[1];
-  });
-
-  const actuals=Object.assign({},STATE.actuals||{});
-  const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
-  if(resetAt) actuals._resetAt=resetAt;
-
-  // Actuals — only write if there's real match data (not just _resetAt)
-  // Participants have STATE.actuals={} (no results), admin has real data
-  // Never let a participant overwrite admin-entered match results
-  const actualsKeys=Object.keys(actuals).filter(function(k){return k!=='_resetAt';});
-  if(actualsKeys.length>0){
-    // Has real match data — admin is writing results, safe to update whole node
-    updates["actuals"]=actuals;
-  } else if(actuals._resetAt){
-    // Only has reset signal — write just the _resetAt path, not the whole node
-    updates["actuals/_resetAt"]=actuals._resetAt;
-  }
-
   (STATE.leagues||[]).forEach(function(l){
     if(l&&l.id) updates["leagues/"+l.id]=l;
   });
+  if(Object.keys(updates).length>0){
+    window._fbDB.ref("q2026").update(updates).catch(function(e){
+      console.warn("fbWriteAdmin failed:",e.message);
+    });
+  }
+}
 
-  window._fbDB.ref("q2026").update(updates).then(function(){
-    setTimeout(function(){window._fbPaused=false;},3000);
-  }).catch(function(e){
-    window._fbPaused=false;
-    console.warn("Firebase write failed:",e.message);
-  });
+// Legacy persist() — now just saves to localStorage (Firebase writes use targeted functions above)
+function persist(){
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  showFlash("✓ Guardado");
 }
 
 let _ft;
@@ -1755,7 +1783,7 @@ function doRegister(){
     STATE.predictions[pid]={groups:{},ko:{},quinName:qname,pwdHash:hash,submitted:false};
     SESSION.pid=pid;
     go("predict",{pid});
-    setTimeout(function(){ persist(); },50);
+    setTimeout(function(){ fbWriteParticipant(pid); },50);
   });
 }
 
@@ -2504,15 +2532,19 @@ function pgLeague(lid, pid){
 }
 
 function createLeague(pid){
+  // Writes only the new league
   const name=val("lg-name-new");
   if(!name){showFlash("⚠ Escribe un nombre para la liga");return;}
   const lg={id:uid(),name,code:mkCode(),createdBy:pid,memberIds:[pid]};
   STATE.leagues.push(lg);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lg.id);
+  fbWriteParticipant(pid);
   go("league",{lid:lg.id,pid});
 }
 
 function joinLeague(pid){
+  // Writes only participant + league
   const raw=document.getElementById("lg-code-join")?.value||"";
   const code=raw.trim().toUpperCase();
   setErr("lg-join-err","");
@@ -2521,7 +2553,8 @@ function joinLeague(pid){
   if(!lg){setErr("lg-join-err","⚠ Código no encontrado. Verifica con quien te invitó.");return;}
   if(lg.memberIds.includes(pid)){setErr("lg-join-err","⚠ Ya eres miembro de esta liga.");return;}
   lg.memberIds.push(pid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lid);
   go("league",{lid:lg.id,pid});
 }
 
@@ -2531,14 +2564,16 @@ function leaveLeague(lid,pid){
   if(!lg)return;
   lg.memberIds=lg.memberIds.filter(x=>x!==pid);
   if(lg.memberIds.length===0) STATE.leagues=STATE.leagues.filter(l=>l.id!==lid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbDeleteLeague(lid);
   go("myscore",{pid,subtab:"leagues"});
 }
 
 function deleteLeague(lid,pid){
   if(!confirm("¿Eliminar esta liga para todos?"))return;
   STATE.leagues=STATE.leagues.filter(l=>l.id!==lid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbDeleteLeague(lid);
   go("myscore",{pid,subtab:"leagues"});
 }
 
@@ -3055,7 +3090,7 @@ function bindEvents(){
       if(!pred.groups)pred.groups={};
       pred.groups[mid]={...pred.groups[mid]||{h:"",a:""},[side]:this.value};
       STATE.predictions[pid]=pred;
-      persist();
+      fbWriteParticipant(pid);
       // Update standings table live
       const grp=MATCHES.find(m=>m.id===mid)?.g;
       const el=document.getElementById("st-"+grp);
@@ -3081,7 +3116,7 @@ function hideHelp(){const m=document.getElementById("help-modal");if(m)m.style.d
 
 function saveForLater(pid){
   go("landing");
-  setTimeout(function(){ persist(); showFlash("💾 Guardado"); }, 50);
+  setTimeout(function(){ localStorage.setItem(LS,JSON.stringify(STATE)); showFlash("💾 Guardado"); }, 50);
 }
 
 function submitPrediction(pid){
@@ -3090,7 +3125,7 @@ function submitPrediction(pid){
   STATE.predictions[pid].submittedAt=new Date().toISOString();
   go("myscore",{pid});
   setTimeout(function(){
-    persist();
+    fbWriteParticipant(pid);
     showFlash("✓ Quiniela enviada!");
     // Send confirmation email in background
     sendConfirmationEmail(pid);
@@ -3172,7 +3207,7 @@ function pickBracket(pid,round,matchId,team){
   if(!pred.ko[round])pred.ko[round]={};
   if(pred.ko[round][matchId]===team)delete pred.ko[round][matchId];
   else pred.ko[round][matchId]=team;
-  persist();
+  fbWriteParticipant(pid);
   go("predict",{pid,subtab:"bracket"});
 }
 
@@ -3182,7 +3217,7 @@ function pickThird(pid,matchId,team){
   if(!pred.ko.third)pred.ko.third={};
   if(team) pred.ko.third[matchId]=team;
   else delete pred.ko.third[matchId];
-  setTimeout(function(){ persist(); },50);
+  setTimeout(function(){ fbWriteParticipant(pid); },50);
   go("predict",{pid,subtab:"bracket"});
 }
 
@@ -3190,13 +3225,14 @@ function clearBracket(pid){
   if(!confirm("¿Limpiar todas las selecciones del bracket?"))return;
   STATE.predictions[pid].ko={};
   go("predict",{pid,subtab:"bracket"});
-  setTimeout(function(){ persist(); },50);
+  setTimeout(function(){ fbWriteParticipant(pid); },50);
 }
 
 
 function saveActuals(){
+  // Admin only — writes ONLY actuals node
   const gl=document.getElementById("agl");
-  persist();showFlash("✓ Resultados guardados");
+  fbWriteActuals();showFlash("✓ Resultados guardados");
 }
 
 function adminShowLocalData(){
@@ -3238,7 +3274,14 @@ function adminPushToFirebase(){
     STATE.leagues=(d.leagues||[]).map(function(lg){
       return Object.assign({},lg,{memberIds:lg.memberIds?(Array.isArray(lg.memberIds)?lg.memberIds:Object.values(lg.memberIds)):[]});
     });
-    persist();
+    fbWriteAdmin();
+    fbWriteActuals();
+    // Also write all predictions
+    if(window._fbDB){
+      const updates={};
+      Object.entries(STATE.predictions||{}).forEach(function(e){if(e[0]&&e[1])updates["predictions/"+e[0]]=e[1];});
+      if(Object.keys(updates).length>0) window._fbDB.ref("q2026").update(updates);
+    }
     showFlash("✅ Datos subidos a Firebase — "+STATE.participants.length+" participantes restaurados");
     go("admin",{tab:"participants"});
   }catch(e){
@@ -3255,20 +3298,21 @@ function adminResetPassword(pid){
   if(newPwd.trim().length<4){showFlash("⚠ La contraseña debe tener al menos 4 caracteres");return;}
   hashPwdStrong(newPwd.trim()).then(function(hash){
     pred.pwdHash=hash;
-    persist();
+    fbWriteParticipant(pid);
     showFlash("✓ Contraseña de "+p.name+" reseteada");
     alert("✓ Contraseña reseteada correctamente.\n\nDile a "+p.name+" que su nueva contraseña es:\n\n"+ newPwd.trim()+"\n\nRecuérdale que puede cambiarla la próxima vez que ingrese.");
   });
 }
 
-function toggleHide(pid){const p=STATE.participants.find(x=>x.id===pid);if(p)p.hidden=!p.hidden;persist();go("admin",{tab:"participants"})}
-function deletePart(pid){if(!confirm("¿Eliminar?"))return;STATE.participants=STATE.participants.filter(x=>x.id!==pid);delete STATE.predictions[pid];persist();go("admin",{tab:"participants"})}
+function toggleHide(pid){const p=STATE.participants.find(x=>x.id===pid);if(p){p.hidden=!p.hidden;fbWriteParticipant(pid);}go("admin",{tab:"participants"})}
+function deletePart(pid){if(!confirm("¿Eliminar?"))return;STATE.participants=STATE.participants.filter(x=>x.id!==pid);delete STATE.predictions[pid];localStorage.setItem(LS,JSON.stringify(STATE));fbDeleteParticipant(pid);go("admin",{tab:"participants"})}
 function adminCreateLeague(){
   const name=val("admin-lg-name").trim();
   if(!name){showFlash("⚠ Escribe un nombre para la liga");return;}
   const code=Math.random().toString(36).slice(2,7).toUpperCase();
   STATE.leagues.push({id:uid(),name,code,memberIds:[],createdBy:"admin"});
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(STATE.leagues[STATE.leagues.length-1].id);
   go("admin",{tab:"leagues"});
   showFlash("✓ Liga '"+name+"' creada");
 }
@@ -3279,7 +3323,8 @@ function adminRenameLeague(lid){
   const newName=document.getElementById("lg-rename-"+lid)?.value?.trim();
   if(!newName){showFlash("⚠ Escribe un nombre");return;}
   lg.name=newName;
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lid);
   go("admin",{tab:"leagues"});
   showFlash("✓ Liga renombrada a '"+newName+"'");
 }
@@ -3291,7 +3336,8 @@ function adminAddMemberToLeague(lid){
   const pid=sel?.value;
   if(!pid)return;
   if(!lg.memberIds.includes(pid)) lg.memberIds.push(pid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lg.id);
   go("admin",{tab:"leagues"});
   const name=STATE.participants.find(x=>x.id===pid)?.name||pid;
   showFlash("✓ "+name+" agregado a la liga");
@@ -3301,7 +3347,8 @@ function adminRegenCode(lid){
   const lg=STATE.leagues.find(x=>x.id===lid);
   if(!lg)return;
   lg.code=Math.random().toString(36).slice(2,7).toUpperCase();
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lid);
   go("admin",{tab:"leagues"});
   showFlash("✓ Código regenerado: "+lg.code);
 }
@@ -3309,7 +3356,8 @@ function adminRegenCode(lid){
 function adminDeleteLeague(lid){
   if(!confirm("¿Eliminar esta liga? Esta acción no se puede deshacer."))return;
   STATE.leagues=STATE.leagues.filter(l=>l.id!==lid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbDeleteLeague(lid);
   go("admin",{tab:"leagues"});
   showFlash("🗑️ Liga eliminada");
 }
@@ -3321,7 +3369,8 @@ function adminAddToLeague(pid){
   const lg=STATE.leagues.find(l=>l.id===lid);
   if(!lg)return;
   if(!lg.memberIds.includes(pid)) lg.memberIds.push(pid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lg.id);
   go("admin",{tab:"participants"});
 }
 
@@ -3331,7 +3380,8 @@ function adminRemoveFromLeague(pid,lid){
   if(!confirm("¿Sacar a este participante de la liga \""+lg.name+"\"?"))return;
   lg.memberIds=lg.memberIds.filter(x=>x!==pid);
   if(lg.memberIds.length===0) STATE.leagues=STATE.leagues.filter(l=>l.id!==lid);
-  persist();
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  fbWriteLeague(lg.id);
   go("admin",{tab:"participants"});
 }
 function resetAll(){
