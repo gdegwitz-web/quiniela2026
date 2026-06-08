@@ -1096,18 +1096,20 @@ function persist(){
   showFlash("✓ Guardado");
   if(window._fbDB){
     window._fbPaused=true;
-    const data={
-      participants:{},
-      predictions:STATE.predictions,
-      actuals:{...STATE.actuals},
-      leagues:{}
-    };
-    // Preserve _resetAt in actuals so other devices still detect the reset
+    const participants={};
+    const leagues={};
+    (STATE.participants||[]).forEach(function(p){if(p&&p.id)participants[p.id]=p;});
+    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)leagues[l.id]=l;});
     const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
-    if(resetAt) data.actuals._resetAt=resetAt;
-    (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
-    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
-    window._fbDB.ref("q2026").set(data).then(function(){
+    const actuals=Object.assign({},STATE.actuals||{});
+    if(resetAt) actuals._resetAt=resetAt;
+    // Use update() to write each section separately — more reliable than set() on parent
+    window._fbDB.ref("q2026").update({
+      participants: participants,
+      predictions:  STATE.predictions||{},
+      actuals:      actuals,
+      leagues:      leagues
+    }).then(function(){
       setTimeout(function(){window._fbPaused=false;},3000);
     }).catch(function(e){
       window._fbPaused=false;
