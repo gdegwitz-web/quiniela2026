@@ -1147,15 +1147,25 @@ function go(page,params={}){
 
 function renderApp(){
   const r=ROUTE,app=document.getElementById("app");
-  if(r.page==="landing")     app.innerHTML=pgLanding();
-  else if(r.page==="register")    app.innerHTML=pgRegister();
-  else if(r.page==="returning")   app.innerHTML=pgReturning();
-  else if(r.page==="predict")     app.innerHTML=pgPredict(r.pid);
-  else if(r.page==="myscore")     app.innerHTML=pgMyScore(r.pid);
-  else if(r.page==="league")      app.innerHTML=pgLeague(r.lid,r.pid);
-  else if(r.page==="admin_login") app.innerHTML=pgAdminLogin();
-  else if(r.page==="admin")       app.innerHTML=pgAdmin(r.tab||"results");
-  else if(r.page==="leaderboard") app.innerHTML=pgLeaderboard(r.tab||"global");
+  if(!app)return;
+  try{
+    if(r.page==="landing")     app.innerHTML=pgLanding();
+    else if(r.page==="register")    app.innerHTML=pgRegister();
+    else if(r.page==="returning")   app.innerHTML=pgReturning();
+    else if(r.page==="predict")     app.innerHTML=pgPredict(r.pid);
+    else if(r.page==="myscore")     app.innerHTML=pgMyScore(r.pid);
+    else if(r.page==="league")      app.innerHTML=pgLeague(r.lid,r.pid);
+    else if(r.page==="admin_login") app.innerHTML=pgAdminLogin();
+    else if(r.page==="admin")       app.innerHTML=pgAdmin(r.tab||"results");
+    else if(r.page==="leaderboard") app.innerHTML=pgLeaderboard(r.tab||"global");
+  }catch(err){
+    console.error("renderApp error:",err);
+    app.innerHTML=`<div style="background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.3);border-radius:10px;padding:1rem;margin:1rem 0">
+      <div style="font-weight:700;color:#ff7070;margin-bottom:.4rem">⚠️ Error al cargar esta sección</div>
+      <div style="font-size:.75rem;color:#ccc;font-family:monospace;word-break:break-all">${err.message}</div>
+      <button onclick="go('landing')" style="margin-top:.7rem;padding:.4rem .8rem;background:#333;border:1px solid #555;color:#eee;border-radius:6px;cursor:pointer;font-size:.75rem">← Volver al inicio</button>
+    </div>`;
+  }
   // Restore bracket scroll synchronously — before browser paints
   if(_bracketScroll>0){
     const bw=document.getElementById("bracket-wrap");
