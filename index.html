@@ -1094,7 +1094,15 @@ function persist(){
   showFlash("✓ Guardado");
   if(window._fbDB){
     window._fbPaused=true;
-    const data={participants:{},predictions:STATE.predictions,actuals:STATE.actuals,leagues:{}};
+    const data={
+      participants:{},
+      predictions:STATE.predictions,
+      actuals:STATE.actuals,
+      leagues:{}
+    };
+    // Preserve _resetAt from Firebase so other devices still detect the reset
+    const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
+    if(resetAt) data._resetAt=resetAt;
     (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
     (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
     window._fbDB.ref("q2026").set(data).then(function(){
@@ -3080,21 +3088,32 @@ function adminRemoveFromLeague(pid,lid){
 function resetAll(){
   if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
   if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
+
+  // Pause Firebase listener so it doesn't restore old data while we wipe
+  window._fbPaused=true;
+
+  // Clear local state immediately
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
   localStorage.removeItem(LS);
   localStorage.removeItem(SESSION_KEY);
+
   if(window._fbDB){
-    // Write _resetAt FIRST so connected devices detect the reset,
-    // then remove all data (leave _resetAt so late-connecting devices still see it)
     const resetAt=Date.now();
-    window._fbDB.ref("q2026/_resetAt").set(resetAt).then(function(){
-      // Small delay so Firebase propagates the timestamp before we wipe
-      setTimeout(function(){
-        window._fbDB.ref("q2026").set({_resetAt:resetAt}).catch(function(){});
-      },1000);
-    }).catch(function(){});
+    // Store the reset timestamp locally so this device doesn't re-trigger
+    localStorage.setItem("q2026_lastReset", String(resetAt));
+    // Write ONLY the resetAt to Firebase — this signals all other devices to wipe
+    window._fbDB.ref("q2026").set({_resetAt: resetAt})
+      .then(function(){
+        console.log("✅ Firebase reseteado");
+        setTimeout(function(){ window._fbPaused=false; }, 2000);
+      })
+      .catch(function(e){
+        console.warn("Firebase reset failed:", e.message);
+        window._fbPaused=false;
+      });
   }
-  showFlash("✓ Borrado — todos los dispositivos se sincronizarán");
+
+  showFlash("✓ Todos los datos borrados");
   go("landing");
 }
 
