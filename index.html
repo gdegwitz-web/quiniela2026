@@ -2185,10 +2185,102 @@ function pgMyScore(pid){
     })()}
   `:""}
   ${tab==="predictions"?`
-    <div class="grp-tabs">${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${g}'})">${g}</button>`).join("")}</div>
+    <div class="grp-tabs" style="overflow-x:auto;white-space:nowrap">
+      ${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${g}'})">${g}</button>`).join("")}
+      <button class="gtab${grp==="KO"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'KO'})" style="color:#ffc800;font-weight:700">🏆 KO</button>
+    </div>
+
+    ${grp==="KO"?`
+    ${(()=>{
+      const ko=pred.ko||{};
+      const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+      const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
+      const kPts=scoreKO(pred);
+      const rounds=[
+        {key:"r32",  label:"Ronda de 32",    pts:10},
+        {key:"r16",  label:"Octavos de Final",pts:15},
+        {key:"qf",   label:"Cuartos de Final",pts:20},
+        {key:"sf",   label:"Semifinales",     pts:25},
+      ];
+      const hasAny=rounds.some(r=>Object.keys(aKO[r.key]||{}).length>0)||aKO.final?.[0]||aKO.f3?.[0];
+      if(!hasAny) return `<div style="text-align:center;padding:2rem .8rem;color:#889;font-size:.82rem">
+        <div style="font-size:2rem;margin-bottom:.5rem">⏳</div>
+        Los resultados de la fase eliminatoria aún no han sido cargados.
+      </div>`;
+
+      let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:1rem;align-items:center">
+        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+kPts} pts</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
+        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">GRUPOS</div><div style="font-size:.9rem;font-weight:700;color:#4de0a0">+${gPts}</div></div>
+        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
+      </div>`;
+
+      rounds.forEach(r=>{
+        const actual=aKO[r.key]||{};
+        if(!Object.keys(actual).length) return;
+        const pick=ko[r.key]||{};
+        let correct=0,total=Object.keys(actual).length;
+        const rows=Object.keys(actual).sort((a,b)=>+a-+b).map(idx=>{
+          const aTeam=actual[idx];
+          const pTeam=pick[String(idx)]||null;
+          const ok=aTeam&&pTeam===aTeam;
+          if(ok) correct++;
+          return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem .4rem;border-radius:7px;background:rgba(255,255,255,.03);margin-bottom:.18rem">
+            <span style="font-size:1rem;flex-shrink:0">${ok?"✅":"❌"}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.75rem;color:#eee">${f(aTeam)} ${aTeam}</div>
+              <div style="font-size:.67rem;color:${ok?"#4de0a0":"#ff8080"}">${pTeam?f(pTeam)+" "+pTeam:"— Sin predicción"}</div>
+            </div>
+            <span style="font-size:.82rem;font-weight:700;color:${ok?"#4de0a0":"#445"};flex-shrink:0">+${ok?r.pts:0}</span>
+          </div>`;
+        }).join("");
+        html+=`<div style="margin-bottom:.7rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">
+            <span style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px">${r.label.toUpperCase()}</span>
+            <span style="font-size:.62rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.05rem .3rem">+${r.pts} c/u</span>
+            <span style="font-size:.62rem;color:#667;margin-left:auto">${correct}/${total} correctos · +${correct*r.pts} pts</span>
+          </div>
+          ${rows}
+        </div>`;
+      });
+
+      // Final, runner-up, 3rd
+      const finalItems=[
+        {key:"final",idx:0, label:"Campeón",     pts:30, col:"#ffc800"},
+        {key:"final",idx:1, label:"Subcampeón",  pts:20, col:"#aaa"},
+        {key:"f3",   idx:0, label:"3er Lugar",   pts:15, col:"#cd7f32"},
+      ];
+      const podioRows=finalItems.filter(x=>{
+        const src=x.key==="final"?aKO.final:aKO.f3;
+        return src&&src[x.idx];
+      });
+      if(podioRows.length){
+        html+=`<div style="margin-bottom:.7rem">
+          <div style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px;margin-bottom:.3rem">PODIO</div>`;
+        podioRows.forEach(x=>{
+          const src=x.key==="final"?aKO.final:aKO.f3;
+          const psrc=x.key==="final"?ko.final:ko.f3;
+          const aTeam=src[x.idx];
+          const pTeam=psrc?psrc[x.idx]:null;
+          const ok=aTeam&&pTeam===aTeam;
+          html+=`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem .4rem;border-radius:7px;background:rgba(255,255,255,.03);margin-bottom:.18rem">
+            <span style="font-size:1rem;flex-shrink:0">${ok?"✅":"❌"}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.68rem;color:${x.col};font-weight:700">${x.label}</div>
+              <div style="font-size:.75rem;color:#eee">${f(aTeam)} ${aTeam}</div>
+              <div style="font-size:.67rem;color:${ok?"#4de0a0":"#ff8080"}">${pTeam?f(pTeam)+" "+pTeam:"— Sin predicción"}</div>
+            </div>
+            <span style="font-size:.82rem;font-weight:700;color:${ok?"#4de0a0":"#445"};flex-shrink:0">+${ok?x.pts:0}</span>
+          </div>`;
+        });
+        html+=`</div>`;
+      }
+      return html;
+    })()}
+    `:`
     <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
     ${MATCHES.filter(m=>m.g===grp).map(m=>{
-      const pr=pred.groups?.[m.id],ac=STATE.actuals[m.id];
+      const pr=pred.groups?.[m.id],ac=(STATE.actuals||{})[m.id];
       let badge="";
       if(pr&&ac&&pr.h!==""&&pr.a!==""&&ac.h!==""&&ac.a!==""){
         const ph=parseInt(pr.h),pa=parseInt(pr.a),ah=parseInt(ac.h),aa=parseInt(ac.a);
@@ -2203,7 +2295,8 @@ function pgMyScore(pid){
         </div>
         <div class="tn r">${trunc(m.a,10)} ${f(m.a)}</div>
       </div>`;}).join("")}
-    ${stTable(calcStandings(grp,STATE.actuals))}
+    ${stTable(calcStandings(grp,STATE.actuals||{}))}
+    `}
     <button class="btn-pdf" onclick="genPDF('${pid}')">📄 DESCARGAR MI PDF</button>
   `:""}
   ${tab==="leagues"?lgTabHTML(pid):""}`;
