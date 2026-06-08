@@ -1056,15 +1056,13 @@ function initFirebase(){
       if(window._fbPaused) return;
       const val=snap.val();
 
-      // Remote reset detection — only trigger if this specific reset hasn't been processed yet
-      const resetAt=val&&val._resetAt ? val._resetAt : 0;
+      // Remote reset detection via actuals._resetAt
+      const resetAt=(val&&val.actuals&&val.actuals._resetAt) ? val.actuals._resetAt : 0;
       if(resetAt){
         const lastSeenReset=parseInt(localStorage.getItem("q2026_lastReset")||"0");
         if(resetAt > lastSeenReset){
-          // Mark this reset as seen BEFORE clearing, to prevent infinite loop
           localStorage.setItem("q2026_lastReset", String(resetAt));
-          // Only clear if we actually had old data (not a fresh device)
-          const hadData = localStorage.getItem(LS);
+          const hadData=localStorage.getItem(LS);
           if(hadData){
             console.log("🔄 Reset remoto detectado — limpiando caché local");
             localStorage.removeItem(LS);
@@ -1075,11 +1073,15 @@ function initFirebase(){
         }
       }
 
-      if(!val || Object.keys(val).filter(k=>k!=="q2026_lastReset"&&k!=="_resetAt").length===0) return;
+      if(!val) return;
 
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
-      if(val.actuals)      STATE.actuals=val.actuals;
+      if(val.actuals){
+        // Strip internal _resetAt before storing actuals in STATE
+        const {_resetAt:_r, ...cleanActuals}=val.actuals;
+        STATE.actuals=cleanActuals;
+      }
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
       localStorage.setItem(LS,JSON.stringify(STATE));
@@ -1097,12 +1099,12 @@ function persist(){
     const data={
       participants:{},
       predictions:STATE.predictions,
-      actuals:STATE.actuals,
+      actuals:{...STATE.actuals},
       leagues:{}
     };
-    // Preserve _resetAt from Firebase so other devices still detect the reset
+    // Preserve _resetAt in actuals so other devices still detect the reset
     const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
-    if(resetAt) data._resetAt=resetAt;
+    if(resetAt) data.actuals._resetAt=resetAt;
     (STATE.participants||[]).forEach(function(p){if(p&&p.id)data.participants[p.id]=p;});
     (STATE.leagues||[]).forEach(function(l){if(l&&l.id)data.leagues[l.id]=l;});
     window._fbDB.ref("q2026").set(data).then(function(){
@@ -3089,31 +3091,28 @@ function resetAll(){
   if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
   if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
 
-  // Pause Firebase listener so it doesn't restore old data while we wipe
   window._fbPaused=true;
-
-  // Clear local state immediately
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
   localStorage.removeItem(LS);
   localStorage.removeItem(SESSION_KEY);
 
   if(window._fbDB){
+    // Write a reset signal to actuals (which has .write:true in Firebase rules)
+    // This tells other devices to clear their local cache
     const resetAt=Date.now();
-    // Store the reset timestamp locally so this device doesn't re-trigger
     localStorage.setItem("q2026_lastReset", String(resetAt));
-    // Write ONLY the resetAt to Firebase — this signals all other devices to wipe
-    window._fbDB.ref("q2026").set({_resetAt: resetAt})
+    window._fbDB.ref("q2026/actuals").set({_resetAt: resetAt})
       .then(function(){
-        console.log("✅ Firebase reseteado");
+        console.log("✅ Reset signal written");
         setTimeout(function(){ window._fbPaused=false; }, 2000);
       })
       .catch(function(e){
-        console.warn("Firebase reset failed:", e.message);
+        console.warn("Reset signal failed:", e.message);
         window._fbPaused=false;
       });
   }
 
-  showFlash("✓ Todos los datos borrados");
+  showFlash("✓ Datos borrados");
   go("landing");
 }
 
