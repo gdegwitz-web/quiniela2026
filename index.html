@@ -1158,11 +1158,21 @@ function persist(){
     if(e[0]&&e[1]) updates["predictions/"+e[0]]=e[1];
   });
 
-  // Actuals — write entire node (admin controlled, safe to overwrite)
   const actuals=Object.assign({},STATE.actuals||{});
   const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
   if(resetAt) actuals._resetAt=resetAt;
-  updates["actuals"]=actuals;
+
+  // Actuals — only write if there's real match data (not just _resetAt)
+  // Participants have STATE.actuals={} (no results), admin has real data
+  // Never let a participant overwrite admin-entered match results
+  const actualsKeys=Object.keys(actuals).filter(function(k){return k!=='_resetAt';});
+  if(actualsKeys.length>0){
+    // Has real match data — admin is writing results, safe to update whole node
+    updates["actuals"]=actuals;
+  } else if(actuals._resetAt){
+    // Only has reset signal — write just the _resetAt path, not the whole node
+    updates["actuals/_resetAt"]=actuals._resetAt;
+  }
 
   (STATE.leagues||[]).forEach(function(l){
     if(l&&l.id) updates["leagues/"+l.id]=l;
