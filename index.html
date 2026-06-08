@@ -21,17 +21,29 @@
 <meta name="apple-mobile-web-app-title" content="Quiniela 2026">
 <link rel="apple-touch-icon" href="https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png">
 
-<!-- Android / Chrome manifest inline via JS -->
-<link rel="manifest" href="data:application/json;charset=utf-8,{
-  %22name%22:%22Quiniela%20FIFA%202026%22,
-  %22short_name%22:%22Quiniela%202026%22,
-  %22description%22:%22Quiniela%20FIFA%20World%20Cup%202026%22,
-  %22start_url%22:%22.%22,
-  %22display%22:%22standalone%22,
-  %22background_color%22:%22%23141824%22,
-  %22theme_color%22:%22%23141824%22,
-  %22icons%22:[{%22src%22:%22https://assets.football-logos.cc/logos/tournaments/1500x1500/fifa-world-cup-2026.31d2489d.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22}]
-}">
+<!-- Android / Chrome manifest -->
+<link rel="manifest" href="manifest.json">
+
+<script>
+// Capture install prompt for Android
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  window._pwaPrompt=e;
+  const btn=document.getElementById('pwa-install-btn');
+  if(btn) btn.style.display='block';
+});
+window.addEventListener('appinstalled', function(){
+  window._pwaPrompt=null;
+  const btn=document.getElementById('pwa-install-btn');
+  if(btn) btn.style.display='none';
+});
+// Unregister any existing service workers to prevent data issues
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(reg){ reg.unregister(); });
+  });
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1122,28 +1134,46 @@ function initFirebase(){
 function persist(){
   localStorage.setItem(LS,JSON.stringify(STATE));
   showFlash("✓ Guardado");
-  if(window._fbDB){
-    window._fbPaused=true;
-    const participants={};
-    const leagues={};
-    (STATE.participants||[]).forEach(function(p){if(p&&p.id)participants[p.id]=p;});
-    (STATE.leagues||[]).forEach(function(l){if(l&&l.id)leagues[l.id]=l;});
-    const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
-    const actuals=Object.assign({},STATE.actuals||{});
-    if(resetAt) actuals._resetAt=resetAt;
-    // Use update() to write each section separately — more reliable than set() on parent
-    window._fbDB.ref("q2026").update({
-      participants: participants,
-      predictions:  STATE.predictions||{},
-      actuals:      actuals,
-      leagues:      leagues
-    }).then(function(){
-      setTimeout(function(){window._fbPaused=false;},3000);
-    }).catch(function(e){
-      window._fbPaused=false;
-      console.warn("Firebase write failed:",e.message);
-    });
+  if(!window._fbDB) return;
+
+  // ── SAFETY GUARD: never write to Firebase with empty STATE before it loads ──
+  const hasParticipants=(STATE.participants||[]).length>0;
+  const hasPredictions=Object.keys(STATE.predictions||{}).length>0;
+  if(!hasParticipants && !hasPredictions && !window._fbLoaded){
+    console.log("persist() skipped — waiting for Firebase to load");
+    return;
   }
+
+  window._fbPaused=true;
+
+  // Build a deep-path update object so we NEVER overwrite sibling data
+  // e.g. "participants/pid1" updates only that participant, not the whole node
+  const updates={};
+
+  (STATE.participants||[]).forEach(function(p){
+    if(p&&p.id) updates["participants/"+p.id]=p;
+  });
+
+  Object.entries(STATE.predictions||{}).forEach(function(e){
+    if(e[0]&&e[1]) updates["predictions/"+e[0]]=e[1];
+  });
+
+  // Actuals — write entire node (admin controlled, safe to overwrite)
+  const actuals=Object.assign({},STATE.actuals||{});
+  const resetAt=parseInt(localStorage.getItem("q2026_lastReset")||"0");
+  if(resetAt) actuals._resetAt=resetAt;
+  updates["actuals"]=actuals;
+
+  (STATE.leagues||[]).forEach(function(l){
+    if(l&&l.id) updates["leagues/"+l.id]=l;
+  });
+
+  window._fbDB.ref("q2026").update(updates).then(function(){
+    setTimeout(function(){window._fbPaused=false;},3000);
+  }).catch(function(e){
+    window._fbPaused=false;
+    console.warn("Firebase write failed:",e.message);
+  });
 }
 
 let _ft;
@@ -1548,6 +1578,10 @@ function pgLanding(){
       </button>
     </div>
     <button onclick="go('admin_login')" style="display:block;width:100%;padding:.4rem;background:none;border:1px solid rgba(124,58,237,.2);border-radius:9px;color:rgba(192,132,252,.5);font-size:.7rem;cursor:pointer">⚙️ Acceso Administrador</button>
+    <button id="pwa-install-btn" onclick="if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){window._pwaPrompt=null;document.getElementById('pwa-install-btn').style.display='none';})}"
+      style="display:none;width:100%;margin-top:.45rem;padding:.5rem;background:rgba(0,150,255,.1);border:1px solid rgba(0,150,255,.28);border-radius:9px;color:#7ad4ff;font-size:.75rem;font-weight:700;cursor:pointer;text-align:center">
+      📲 Instalar app en este dispositivo
+    </button>
   </div>`;
 
   return sessionBanner+heroHTML()+choicesCard+`
@@ -2731,6 +2765,17 @@ function pgAdmin(tab){
     <div class="danger-title">🔴 ZONA DE PELIGRO</div>
     <div style="font-size:.72rem;color:#889;margin-bottom:.6rem;line-height:1.5">Borra todos los datos de prueba antes del lanzamiento oficial.</div>
     <button class="btn-red" onclick="resetAll()">🗑️ BORRAR TODOS LOS DATOS DE PRUEBA</button>
+
+    <div style="margin-top:1rem;border-top:1px solid rgba(255,200,0,.15);padding-top:.8rem">
+      <div style="font-size:.65rem;letter-spacing:2px;color:#ffc800;margin-bottom:.5rem">🔄 RECUPERACIÓN DE DATOS</div>
+      <button onclick="adminShowLocalData()" style="display:block;width:100%;padding:.55rem;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.2);border-radius:8px;color:#ffc800;font-size:.78rem;font-weight:700;cursor:pointer;margin-bottom:.35rem">
+        🔍 Ver datos en este dispositivo
+      </button>
+      <button onclick="adminPushToFirebase()" style="display:block;width:100%;padding:.55rem;background:rgba(0,200,83,.08);border:1px solid rgba(0,200,83,.2);border-radius:8px;color:#4de0a0;font-size:.78rem;font-weight:700;cursor:pointer">
+        ☁️ Forzar subida de datos locales a Firebase
+      </button>
+      <div id="local-data-display" style="display:none;margin-top:.5rem;background:rgba(0,0,0,.3);border-radius:8px;padding:.6rem;font-size:.62rem;color:#aaa;word-break:break-all;max-height:200px;overflow-y:auto"></div>
+    </div>
   </div>`:""}
 
   ${tab==="stats"?adminStats(ps):""}`;
@@ -3125,6 +3170,53 @@ function saveActuals(){
   persist();showFlash("✓ Resultados guardados");
 }
 
+function adminShowLocalData(){
+  const raw=localStorage.getItem("q2026");
+  const div=document.getElementById("local-data-display");
+  if(!div)return;
+  if(!raw){
+    div.style.display="block";
+    div.textContent="⚠️ No hay datos en este dispositivo (localStorage vacío)";
+    return;
+  }
+  try{
+    const d=JSON.parse(raw);
+    const participants=(d.participants||[]).length;
+    const predictions=Object.keys(d.predictions||{}).length;
+    const leagues=(d.leagues||[]).length;
+    div.style.display="block";
+    div.innerHTML=`<div style="color:#4de0a0;font-weight:700;margin-bottom:.3rem">✅ Datos encontrados:</div>
+      <div>👥 Participantes: <strong>${participants}</strong></div>
+      <div>📋 Predicciones: <strong>${predictions}</strong></div>
+      <div>🏅 Ligas: <strong>${leagues}</strong></div>
+      <div style="margin-top:.4rem;color:#ffc800">Si los números son correctos, toca "Forzar subida" para restaurar Firebase.</div>`;
+  }catch(e){
+    div.style.display="block";
+    div.textContent="Error leyendo datos: "+e.message;
+  }
+}
+
+function adminPushToFirebase(){
+  const raw=localStorage.getItem("q2026");
+  if(!raw){showFlash("⚠️ No hay datos locales para subir");return;}
+  if(!window._fbDB){showFlash("⚠️ Firebase no conectado");return;}
+  if(!confirm("¿Subir los datos locales de este dispositivo a Firebase?"))return;
+  try{
+    const d=JSON.parse(raw);
+    STATE.participants=d.participants||[];
+    STATE.predictions=d.predictions||{};
+    STATE.actuals=d.actuals||{};
+    STATE.leagues=(d.leagues||[]).map(function(lg){
+      return Object.assign({},lg,{memberIds:lg.memberIds?(Array.isArray(lg.memberIds)?lg.memberIds:Object.values(lg.memberIds)):[]});
+    });
+    persist();
+    showFlash("✅ Datos subidos a Firebase — "+STATE.participants.length+" participantes restaurados");
+    go("admin",{tab:"participants"});
+  }catch(e){
+    showFlash("❌ Error: "+e.message);
+  }
+}
+
 function adminResetPassword(pid){
   const p=STATE.participants.find(x=>x.id===pid);
   const pred=STATE.predictions[pid];
@@ -3215,7 +3307,8 @@ function adminRemoveFromLeague(pid,lid){
 }
 function resetAll(){
   if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
-  if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
+  const conf=prompt('Escribe "BORRAR" para confirmar:');
+  if(conf!=="BORRAR"){showFlash("❌ Cancelado — escribe BORRAR exactamente");return;}
 
   window._fbPaused=true;
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
@@ -3223,19 +3316,12 @@ function resetAll(){
   localStorage.removeItem(SESSION_KEY);
 
   if(window._fbDB){
-    // Write a reset signal to actuals (which has .write:true in Firebase rules)
-    // This tells other devices to clear their local cache
     const resetAt=Date.now();
-    localStorage.setItem("q2026_lastReset", String(resetAt));
-    window._fbDB.ref("q2026/actuals").set({_resetAt: resetAt})
+    localStorage.setItem("q2026_lastReset",String(resetAt));
+    window._fbDB.ref("q2026/actuals").set({_resetAt:resetAt})
       .then(function(){
-        console.log("✅ Reset signal written");
-        setTimeout(function(){ window._fbPaused=false; }, 2000);
-      })
-      .catch(function(e){
-        console.warn("Reset signal failed:", e.message);
-        window._fbPaused=false;
-      });
+        setTimeout(function(){window._fbPaused=false;},2000);
+      }).catch(function(){window._fbPaused=false;});
   }
 
   showFlash("✓ Datos borrados");
