@@ -1085,6 +1085,8 @@ function initFirebase(){
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
       localStorage.setItem(LS,JSON.stringify(STATE));
+      // Re-render so admin/leaderboard pages show fresh Firebase data
+      renderApp();
     });
   } catch(e){
     console.warn("Firebase unavailable:",e.message);
