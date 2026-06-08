@@ -829,59 +829,62 @@ function saveKOResult(round, idx, team){
 
 // KO round scoring — compare participant's picks vs admin-confirmed winners
 function scoreKO(pred){
-  const ko=pred.ko||{};
-  const aKO=STATE.actuals._ko||{};
-  let p=0;
-  const rounds={r32:10, r16:15, qf:20, sf:25};
-  Object.entries(rounds).forEach(([rnd,pts])=>{
-    const actual=aKO[rnd]||{};
-    const pick=ko[rnd]||{};
-    Object.keys(actual).forEach(idx=>{
-      if(actual[idx]&&pick[String(idx)]===actual[idx]) p+=pts;
+  try{
+    const ko=pred.ko||{};
+    const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+    let p=0;
+    const rounds={r32:10, r16:15, qf:20, sf:25};
+    Object.entries(rounds).forEach(([rnd,pts])=>{
+      const actual=aKO[rnd]||{};
+      const pick=ko[rnd]||{};
+      Object.keys(actual).forEach(idx=>{
+        if(actual[idx]&&pick[String(idx)]===actual[idx]) p+=pts;
+      });
     });
-  });
-  // Final — champion +30
-  const aFinal=aKO.final||{};
-  const pFinal=ko.final||{};
-  if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=30;
-  // Runner-up +20
-  if(aFinal[1]&&pFinal[1]===aFinal[1]) p+=20;
-  // 3rd place +15
-  const aF3=aKO.f3||{};
-  const pF3=ko.f3||{};
-  if(aF3[0]&&pF3[0]===aF3[0]) p+=15;
-  return p;
+    const aFinal=aKO.final||{};
+    const pFinal=ko.final||{};
+    if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=30;
+    if(aFinal[1]&&pFinal[1]===aFinal[1]) p+=20;
+    const aF3=aKO.f3||{};
+    const pF3=ko.f3||{};
+    if(aF3[0]&&pF3[0]===aF3[0]) p+=15;
+    return p;
+  }catch(e){return 0;}
 }
 
 // Detailed KO score breakdown for admin audit
 function scoreKODetail(pred){
-  const ko=pred.ko||{};
-  const aKO=STATE.actuals._ko||{};
-  const rows=[];
-  const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"},sf:{pts:25,label:"Semis"}};
-  Object.entries(rounds).forEach(([rnd,{pts,label}])=>{
-    const actual=aKO[rnd]||{};
-    const pick=ko[rnd]||{};
-    Object.keys(actual).sort((a,b)=>+a-+b).forEach(idx=>{
-      const aTeam=actual[idx];
-      const pTeam=pick[String(idx)]||"—";
-      const ok=aTeam&&pTeam===aTeam;
-      rows.push({round:label,idx,aTeam,pTeam,pts:ok?pts:0,ok});
+  try{
+    const ko=pred.ko||{};
+    const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+    const rows=[];
+    const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"},sf:{pts:25,label:"Semis"}};
+    Object.entries(rounds).forEach(([rnd,cfg])=>{
+      const actual=aKO[rnd]||{};
+      const pick=ko[rnd]||{};
+      Object.keys(actual).sort((a,b)=>+a-+b).forEach(idx=>{
+        const aTeam=actual[idx];
+        const pTeam=pick[String(idx)]||"—";
+        const ok=aTeam&&pTeam===aTeam;
+        rows.push({round:cfg.label,idx,aTeam,pTeam,pts:ok?cfg.pts:0,ok});
+      });
     });
-  });
-  const aFinal=aKO.final||{}, pFinal=ko.final||{};
-  if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?30:0,ok:pFinal[0]===aFinal[0]});
-  if(aFinal[1]) rows.push({round:"Subcampeón",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:pFinal[1]===aFinal[1]?20:0,ok:pFinal[1]===aFinal[1]});
-  const aF3=aKO.f3||{}, pF3=ko.f3||{};
-  if(aF3[0]) rows.push({round:"3er lugar",idx:0,aTeam:aF3[0],pTeam:pF3[0]||"—",pts:pF3[0]===aF3[0]?15:0,ok:pF3[0]===aF3[0]});
-  return rows;
+    const aFinal=aKO.final||{}, pFinal=ko.final||{};
+    if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?30:0,ok:pFinal[0]===aFinal[0]});
+    if(aFinal[1]) rows.push({round:"Subcampeón",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:pFinal[1]===aFinal[1]?20:0,ok:pFinal[1]===aFinal[1]});
+    const aF3=aKO.f3||{}, pF3=ko.f3||{};
+    if(aF3[0]) rows.push({round:"3er lugar",idx:0,aTeam:aF3[0],pTeam:pF3[0]||"—",pts:pF3[0]===aF3[0]?15:0,ok:pF3[0]===aF3[0]});
+    return rows;
+  }catch(e){return [];}
 }
 
 // Total score: groups + KO
 function scoreFull(pid){
-  const pred=STATE.predictions[pid]||{};
-  return scoreGroups(pred.groups||{}, STATE.actuals)
-       + scoreKO(pred);
+  try{
+    const pred=STATE.predictions[pid]||{};
+    const actuals=STATE.actuals||{};
+    return scoreGroups(pred.groups||{}, actuals) + scoreKO(pred);
+  }catch(e){return 0;}
 }
 
 // Build KO bracket from group results + picks
