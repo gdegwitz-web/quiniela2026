@@ -1078,15 +1078,17 @@ function initFirebase(){
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals){
-        // Strip internal _resetAt before storing actuals in STATE
         const {_resetAt:_r, ...cleanActuals}=val.actuals;
         STATE.actuals=cleanActuals;
       }
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
       localStorage.setItem(LS,JSON.stringify(STATE));
-      // Re-render so admin/leaderboard pages show fresh Firebase data
-      renderApp();
+      // Only re-render if enough time has passed since last navigation (avoids tab interference)
+      const now=Date.now();
+      if(!window._lastNav || (now-window._lastNav)>1500){
+        renderApp();
+      }
     });
   } catch(e){
     console.warn("Firebase unavailable:",e.message);
@@ -1132,7 +1134,7 @@ let ROUTE={page:"landing"};
 let _bracketScroll=0; // preserve bracket scroll across re-renders
 
 function go(page,params={}){
-  // Save bracket scroll before any navigation
+  window._lastNav=Date.now(); // track navigation time to guard Firebase re-renders
   const bw=document.getElementById("bracket-wrap");
   if(bw) _bracketScroll=bw.scrollLeft;
   ROUTE={page,...params};
