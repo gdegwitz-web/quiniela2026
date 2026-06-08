@@ -1078,15 +1078,16 @@ function initFirebase(){
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals){
-        const {_resetAt:_r, ...cleanActuals}=val.actuals;
-        STATE.actuals=cleanActuals;
+        const actClean=Object.assign({},val.actuals);
+        delete actClean._resetAt;
+        STATE.actuals=actClean;
       }
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
       localStorage.setItem(LS,JSON.stringify(STATE));
-      // Only re-render if enough time has passed since last navigation (avoids tab interference)
-      const now=Date.now();
-      if(!window._lastNav || (now-window._lastNav)>1500){
+      // On first Firebase load (e.g. incognito), refresh the page so data appears
+      if(!window._fbLoaded){
+        window._fbLoaded=true;
         renderApp();
       }
     });
