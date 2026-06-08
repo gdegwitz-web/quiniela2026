@@ -1053,15 +1053,40 @@ function initFirebase(){
     window._fbPaused=false;
     console.log("✅ Firebase conectado");
     db.ref("q2026").on("value",function(snap){
-      // Skip if we just wrote (avoids overwriting STATE during navigation)
       if(window._fbPaused) return;
       const val=snap.val();
-      if(!val) return;
+
+      // Remote reset detection: if Firebase is empty or has a _resetAt timestamp
+      // newer than our local data, wipe localStorage and reload
+      if(!val || Object.keys(val).length===0){
+        const resetAt=snap.child("_resetAt").val()||0;
+        const localSaved=STATE._savedAt||0;
+        if(resetAt>localSaved){
+          console.log("🔄 Reset remoto detectado — limpiando caché local");
+          localStorage.removeItem(LS);
+          localStorage.removeItem(SESSION_KEY);
+          location.reload();
+        }
+        return;
+      }
+
+      // Check _resetAt even when val exists (admin may have reset recently)
+      const resetAt=val._resetAt||0;
+      const localSaved=STATE._savedAt||0;
+      if(resetAt && resetAt>localSaved){
+        console.log("🔄 Reset remoto detectado — limpiando caché local");
+        localStorage.removeItem(LS);
+        localStorage.removeItem(SESSION_KEY);
+        location.reload();
+        return;
+      }
+
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals)      STATE.actuals=val.actuals;
       if(val.leagues)      STATE.leagues=Object.values(val.leagues);
       if(!STATE.leagues)   STATE.leagues=[];
+      STATE._savedAt=Date.now();
       localStorage.setItem(LS,JSON.stringify(STATE));
     });
   } catch(e){
@@ -3062,8 +3087,20 @@ function resetAll(){
   if(!confirm("🔴 Confirmación final. ¿Proceder?"))return;
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
   localStorage.removeItem(LS);
-  if(window._fbDB) window._fbDB.ref("q2026").remove().catch(function(){});
-  showFlash("✓ Borrado");go("landing");
+  localStorage.removeItem(SESSION_KEY);
+  if(window._fbDB){
+    // Write _resetAt FIRST so connected devices detect the reset,
+    // then remove all data (leave _resetAt so late-connecting devices still see it)
+    const resetAt=Date.now();
+    window._fbDB.ref("q2026/_resetAt").set(resetAt).then(function(){
+      // Small delay so Firebase propagates the timestamp before we wipe
+      setTimeout(function(){
+        window._fbDB.ref("q2026").set({_resetAt:resetAt}).catch(function(){});
+      },1000);
+    }).catch(function(){});
+  }
+  showFlash("✓ Borrado — todos los dispositivos se sincronizarán");
+  go("landing");
 }
 
 // ── PDF GENERATION (2 pages, landscape A4) ─────────────
