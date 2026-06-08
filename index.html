@@ -2402,7 +2402,7 @@ function pgAdmin(tab){
     ${adminBracketSVG()}
     `:`
     <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
-    ${MATCHES.filter(m=>m.g===grp).map(m=>{const s=STATE.actuals[m.id]||{h:"",a:""};const done=s.h!==""&&s.a!=="";
+    ${MATCHES.filter(m=>m.g===grp).map(m=>{const s=(STATE.actuals||{})[m.id]||{h:"",a:""};const done=s.h!==""&&s.a!=="";
       return `<div class="match${done?" ":""}" style="${done?"border-color:rgba(0,200,83,.25)":""}">
         <div class="tn">${f(m.h)} ${trunc(m.h,11)}</div>
         <div class="si">
@@ -2412,7 +2412,7 @@ function pgAdmin(tab){
         </div>
         <div class="tn r">${trunc(m.a,11)} ${f(m.a)}</div>
       </div>`;}).join("")}
-    <div id="ast-${grp}">${stTable(calcStandings(grp,STATE.actuals))}</div>
+    <div id="ast-${grp}">${stTable(calcStandings(grp,STATE.actuals||{}))}</div>
     <button class="btn-green" onclick="saveActuals()">💾 GUARDAR RESULTADOS</button>
     `}
   </div>`:""}
@@ -2420,6 +2420,7 @@ function pgAdmin(tab){
     <h2>GESTIÓN DE PARTICIPANTES</h2>
     ${ps.length===0?`<p style="color:#667;font-size:.82rem;text-align:center;padding:.7rem">No hay participantes aún.</p>`:""}
     ${ps.map(p=>{
+      try{
       const sub=STATE.predictions[p.id]?.submitted;
       const qn=STATE.predictions[p.id]?.quinName||"";
       const myLeagues=STATE.leagues.filter(l=>l.memberIds.includes(p.id));
@@ -2476,8 +2477,12 @@ function pgAdmin(tab){
             <!-- Bracket readonly view -->
             <div style="font-size:.68rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:.35rem">🏟️ BRACKET DE ${p.name.toUpperCase()}</div>
             ${(()=>{
-              const pred2=STATE.predictions[p.id]||{};
-              return bracketSVG("view",pred2);
+              try{
+                const pred2=STATE.predictions[p.id]||{};
+                return bracketSVG("view",pred2);
+              }catch(e){
+                return `<div style="font-size:.72rem;color:#667;padding:.5rem">No disponible</div>`;
+              }
             })()}
 
             <!-- Leagues -->
@@ -2506,7 +2511,9 @@ function pgAdmin(tab){
             </div>`:`<p style="font-size:.72rem;color:#667;margin-top:.3rem">No hay más ligas disponibles.</p>`}
           </div>
         </div>
-      </div>`;}).join("")}
+      </div>`;
+      }catch(e){console.warn('Participant render error:',e);return `<div class="p-item" style="font-size:.72rem;color:#667;padding:.5rem">${p.name||p.id} — error</div>`;}
+      }).join("")}
   </div>`:""}
   ${tab==="leagues"?`<div class="card">
     <h2>🏅 LIGAS PRIVADAS <span style="font-size:.72rem;color:#889;font-weight:400">(${STATE.leagues.length} liga${STATE.leagues.length!==1?"s":""})</span></h2>
