@@ -2350,8 +2350,8 @@ function pgMyScore(pid){
   ${tab==="hoy"?hoyTab(pid,pred):""}
   ${tab==="score"?`
     <div class="score-banner">
-      <div style="font-size:.75rem;letter-spacing:2px;color:#ffc80099">"${qn}"</div>
       <div style="font-size:1.2rem;font-weight:700;color:#4de0a0;margin:.2rem 0">${p.name}</div>
+      ${qn&&qn!==p.name?`<div style="font-size:.7rem;color:#ffc80099;margin-bottom:.2rem">"${qn}"</div>`:""}
       <div class="score-big">${gPts}</div>
       <div style="font-size:.75rem;color:#889;margin-top:.3rem">${gPts} pts grupos</div>
     </div>
@@ -2362,10 +2362,10 @@ function pgMyScore(pid){
       return myLeagues.map(lg=>{
         const rows=lg.memberIds.map(mid=>{
           const mp=STATE.participants.find(x=>x.id===mid);
-          const qn2=STATE.predictions[mid]?.quinName||mp?.name||"—";
+          const qn2=STATE.predictions[mid]?.quinName||"";
           const pts=lgScore(mid);
           const isMe=mid===pid;
-          return {qn:qn2,pts,isMe,hidden:mp?.hidden||false};
+          return {qn:qn2,name:mp?.name||"—",pts,isMe,hidden:mp?.hidden||false};
         }).filter(r=>!r.hidden||r.isMe).sort((a,b)=>b.pts-a.pts);
         const myPos=rows.findIndex(r=>r.isMe);
         return `<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,200,0,.18);border-radius:12px;margin:.6rem 0;overflow:hidden">
@@ -2381,10 +2381,12 @@ function pgMyScore(pid){
               background:${r.isMe?"rgba(255,200,0,.1)":"rgba(255,255,255,.04)"};
               border:1px solid ${r.isMe?"rgba(255,200,0,.35)":"rgba(255,255,255,.07)"}">
               <span style="width:22px;text-align:center;font-size:${i<3?"1rem":".78rem"};flex-shrink:0">${medals[i]||"#"+(i+1)}</span>
-              <span style="flex:1;font-size:.85rem;font-weight:${r.isMe?"700":"500"};
-                color:${r.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                ${r.qn}${r.isMe?` <span style="font-size:.6rem;color:#ffc80066;font-weight:400">← tú</span>`:""}
-              </span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.85rem;font-weight:${r.isMe?"700":"500"};color:${r.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  ${r.name}${r.isMe?` <span style="font-size:.6rem;color:#ffc80066;font-weight:400">← tú</span>`:""}
+                </div>
+                ${r.qn&&r.qn!==r.name?`<div style="font-size:.62rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${r.qn}"</div>`:""}
+              </div>
               <span style="font-size:1.05rem;font-weight:700;color:${r.isMe?"#ffc800":"#aab"};flex-shrink:0">
                 ${r.pts}<small style="font-size:.52rem;color:#556;margin-left:1px">pts</small>
               </span>
@@ -2568,7 +2570,8 @@ function lgRankHTML(lg, myPid){
     ${scored.map((m,i)=>`<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:1px solid ${m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)"}">
       <span style="font-size:${i<3?"1rem":".8rem"};width:22px;flex-shrink:0;text-align:center">${medals[i]||"#"+(i+1)}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.85rem;color:${m.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.qn}${m.isMe?` <span style="font-size:.6rem;color:#ffc80099;font-weight:400">← tú</span>`:""}</div>
+        <div style="font-weight:700;font-size:.85rem;color:${m.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}${m.isMe?` <span style="font-size:.6rem;color:#ffc80099;font-weight:400">← tú</span>`:""}</div>
+        ${m.qn&&m.qn!==m.name?`<div style="font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${m.qn}"</div>`:""}
         ${!m.sub?`<div style="font-size:.62rem;color:#667">Pendiente de envío</div>`:""}
       </div>
       <span style="font-size:1.1rem;font-weight:700;color:${m.isMe?"#ffc800":"#aab"};flex-shrink:0">${m.pts}<small style="font-size:.55rem;color:#555;margin-left:1px">pts</small></span>
@@ -3072,14 +3075,14 @@ function adminStats(ps){
   <div style="font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem">📊 TABLA COMPLETA (${totalPlayed} partidos jugados)</div>
   <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;margin-bottom:.9rem">
     <div style="display:grid;grid-template-columns:28px 1fr 38px 38px 38px 48px;gap:0;padding:.4rem .6rem;background:rgba(255,200,0,.08);font-size:.6rem;color:#ffc800;font-weight:700;letter-spacing:.5px">
-      <span>#</span><span>QUINIELA</span><span style="text-align:center">⭐</span><span style="text-align:center">✓</span><span style="text-align:center">✗</span><span style="text-align:right">PTS</span>
+      <span>#</span><span>PARTICIPANTE</span><span style="text-align:center">⭐</span><span style="text-align:center">✓</span><span style="text-align:center">✗</span><span style="text-align:right">PTS</span>
     </div>
     ${ranked.map((p,i)=>`
     <div style="display:grid;grid-template-columns:28px 1fr 38px 38px 38px 48px;gap:0;padding:.45rem .6rem;border-top:1px solid rgba(255,255,255,.05);background:${i===0?"rgba(255,200,0,.06)":"none"}">
       <span style="font-size:${i<3?"1rem":".75rem"}">${medals[i]||"#"+(i+1)}</span>
       <div style="min-width:0">
-        <div style="font-size:.8rem;font-weight:${i===0?"700":"500"};color:${i===0?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${STATE.predictions[p.id]?.quinName||p.name}</div>
-        <div style="font-size:.6rem;color:#667">${p.name}</div>
+        <div style="font-size:.8rem;font-weight:${i===0?"700":"500"};color:${i===0?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+        ${STATE.predictions[p.id]?.quinName&&STATE.predictions[p.id].quinName!==p.name?`<div style="font-size:.6rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${STATE.predictions[p.id].quinName}"</div>`:`<div style="font-size:.6rem;color:#667">&nbsp;</div>`}
       </div>
       <span style="text-align:center;font-size:.8rem;color:#4de0a0;font-weight:700">${p.exact}</span>
       <span style="text-align:center;font-size:.8rem;color:#88aaff">${p.correct}</span>
