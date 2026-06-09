@@ -841,10 +841,24 @@ function scoreGroups(pred,actual){
 function pickAdminKO(round,matchId,team){
   if(!STATE.actuals._ko) STATE.actuals._ko={};
   if(!STATE.actuals._ko[round]) STATE.actuals._ko[round]={};
-  if(STATE.actuals._ko[round][matchId]===team)
+  if(STATE.actuals._ko[round][matchId]===team){
     delete STATE.actuals._ko[round][matchId];
-  else
+    // Also clear 4th place if deselecting f3 winner
+    if(round==="f3"&&matchId===0) delete STATE.actuals._ko.f3[1];
+  } else {
     STATE.actuals._ko[round][matchId]=team;
+    // Auto-store 4th place (loser of 3rd place match)
+    if(round==="f3"&&matchId===0){
+      try{
+        const B=adminBracketSVG.__lastB||(function(){
+          const rg={};MATCHES.forEach(m=>{const ac=(STATE.actuals||{})[m.id];if(ac&&ac.h!=="")rg[m.id]=ac;});
+          return buildBracket(rg,STATE.actuals._ko||{});
+        })();
+        const f3match=B&&B.f3;
+        if(f3match){const loser=f3match.h===team?f3match.a:f3match.h;if(loser)STATE.actuals._ko.f3[1]=loser;}
+      }catch(e){}
+    }
+  }
   fbWriteActuals();
   showFlash("✓ "+team+" clasificado");
   go("admin",{tab:"results",grp:"KO"});
@@ -859,11 +873,15 @@ function saveKOResult(round, idx, team){
 }
 
 // KO round scoring — compare participant's picks vs admin-confirmed winners
+// R32:+10, R16:+15, QF:+20, SF:+25
+// Finalist (each correct):+30, Champion:+40, Runner-up:+30, 3rd:+20, 4th:+10
 function scoreKO(pred){
   try{
     const ko=pred.ko||{};
     const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
     let p=0;
+
+    // R32→SF
     const rounds={r32:10, r16:15, qf:20, sf:25};
     Object.entries(rounds).forEach(([rnd,pts])=>{
       const actual=aKO[rnd]||{};
@@ -872,13 +890,37 @@ function scoreKO(pred){
         if(actual[idx]&&pick[String(idx)]===actual[idx]) p+=pts;
       });
     });
+
     const aFinal=aKO.final||{};
     const pFinal=ko.final||{};
-    if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=30;
-    if(aFinal[1]&&pFinal[1]===aFinal[1]) p+=20;
+    const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
+
+    // +30 per team correctly predicted IN the final (regardless of position)
+    if(actualFinalists.length>0){
+      if(pFinal[0]&&actualFinalists.includes(pFinal[0])) p+=30;
+      if(pFinal[1]&&actualFinalists.includes(pFinal[1])) p+=30;
+    }
+    // +40 Champion exact
+    if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=40;
+    // +30 Runner-up exact
+    if(aFinal[1]&&pFinal[1]===aFinal[1]) p+=30;
+
+    // +20 3rd place
     const aF3=aKO.f3||{};
     const pF3=ko.f3||{};
-    if(aF3[0]&&pF3[0]===aF3[0]) p+=15;
+    if(aF3[0]&&pF3[0]===aF3[0]) p+=20;
+
+    // +10 4th place (auto-derived: loser of 3rd place match)
+    if(aF3[1]){
+      try{
+        const B=buildBracket(pred.groups||{},ko);
+        if(B&&B.f3){
+          const pred4th=B.f3.h===pF3[0]?B.f3.a:B.f3.h;
+          if(pred4th&&pred4th===aF3[1]) p+=10;
+        }
+      }catch(e){}
+    }
+
     return p;
   }catch(e){return 0;}
 }
@@ -889,6 +931,18 @@ function scoreKODetail(pred){
     const ko=pred.ko||{};
     const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
     const rows=[];
+    // Group advancement
+    try{
+      const Bp=buildBracket(pred.groups||{},ko);
+      const Ba=buildBracket(STATE.actuals||{},(STATE.actuals&&STATE.actuals._ko)||{});
+      if(Bp&&Ba){
+        const actR32=new Set();Ba.r32.forEach(m=>{if(m.h)actR32.add(m.h);if(m.a)actR32.add(m.a);});
+        if(actR32.size>0) Bp.r32.forEach(m=>{
+          if(m.h){const ok=actR32.has(m.h);rows.push({round:"Clasificados 16vos",idx:m.id,aTeam:ok?m.h:"—",pTeam:m.h,pts:ok?8:0,ok});}
+          if(m.a){const ok=actR32.has(m.a);rows.push({round:"Clasificados 16vos",idx:m.id+100,aTeam:ok?m.a:"—",pTeam:m.a,pts:ok?8:0,ok});}
+        });
+      }
+    }catch(e){}
     const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"},sf:{pts:25,label:"Semis"}};
     Object.entries(rounds).forEach(([rnd,cfg])=>{
       const actual=aKO[rnd]||{};
@@ -901,22 +955,80 @@ function scoreKODetail(pred){
       });
     });
     const aFinal=aKO.final||{}, pFinal=ko.final||{};
-    if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?30:0,ok:pFinal[0]===aFinal[0]});
-    if(aFinal[1]) rows.push({round:"Subcampeón",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:pFinal[1]===aFinal[1]?20:0,ok:pFinal[1]===aFinal[1]});
+    const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
+    // Finalist bonus (+30 each)
+    if(aFinal[0]){
+      const ok0=actualFinalists.includes(pFinal[0]);
+      rows.push({round:"Finalista",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:ok0?30:0,ok:ok0});
+    }
+    if(aFinal[1]){
+      const ok1=actualFinalists.includes(pFinal[1]);
+      rows.push({round:"Finalista",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:ok1?30:0,ok:ok1});
+    }
+    // Champion +40
+    if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?40:0,ok:pFinal[0]===aFinal[0]});
+    // Runner-up +30
+    if(aFinal[1]) rows.push({round:"Subcampeón",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:pFinal[1]===aFinal[1]?30:0,ok:pFinal[1]===aFinal[1]});
     const aF3=aKO.f3||{}, pF3=ko.f3||{};
-    if(aF3[0]) rows.push({round:"3er lugar",idx:0,aTeam:aF3[0],pTeam:pF3[0]||"—",pts:pF3[0]===aF3[0]?15:0,ok:pF3[0]===aF3[0]});
+    // 3rd +20
+    if(aF3[0]) rows.push({round:"3er lugar",idx:0,aTeam:aF3[0],pTeam:pF3[0]||"—",pts:pF3[0]===aF3[0]?20:0,ok:pF3[0]===aF3[0]});
+    // 4th +10
+    if(aF3[1]){
+      try{
+        const B=buildBracket(pred.groups||{},ko);
+        if(B&&B.f3){
+          const pred4th=B.f3.h===pF3[0]?B.f3.a:B.f3.h;
+          rows.push({round:"4to lugar",idx:1,aTeam:aF3[1],pTeam:pred4th||"—",pts:pred4th===aF3[1]?10:0,ok:pred4th===aF3[1]});
+        }
+      }catch(e){}
+    }
     return rows;
   }catch(e){return [];}
 }
 
-// Total score: groups + KO
+// +8 pts per team correctly predicted to advance from groups to R32
+function scoreGroupAdvancement(pred){
+  try{
+    // Need actual group results to determine real qualifiers
+    const actuals=STATE.actuals||{};
+    const playedMatches=MATCHES.filter(m=>{
+      const a=actuals[m.id]; return a&&a.h!==""&&a.a!=="";
+    }).length;
+    if(playedMatches<3) return 0; // not enough data yet
+
+    // Build brackets to get R32 teams
+    const Bpred=buildBracket(pred.groups||{},pred.ko||{});
+    const Bactual=buildBracket(actuals,actuals._ko||{});
+    if(!Bpred||!Bactual) return 0;
+
+    // Collect actual R32 qualifiers
+    const actualR32=new Set();
+    Bactual.r32.forEach(m=>{
+      if(m.h) actualR32.add(m.h);
+      if(m.a) actualR32.add(m.a);
+    });
+    if(actualR32.size===0) return 0;
+
+    // Count correctly predicted qualifiers (+8 each)
+    let pts=0;
+    Bpred.r32.forEach(m=>{
+      if(m.h&&actualR32.has(m.h)) pts+=8;
+      if(m.a&&actualR32.has(m.a)) pts+=8;
+    });
+    return pts;
+  }catch(e){return 0;}
+}
+
+// Total score: groups + group advancement + KO
 function scoreFull(pid){
   try{
     const pred=STATE.predictions[pid]||{};
-  if(!pred.groups) pred.groups={};
-  if(!pred.ko) pred.ko={};
+    if(!pred.groups) pred.groups={};
+    if(!pred.ko) pred.ko={};
     const actuals=STATE.actuals||{};
-    return scoreGroups(pred.groups||{}, actuals) + scoreKO(pred);
+    return scoreGroups(pred.groups,actuals)
+         + scoreGroupAdvancement(pred)
+         + scoreKO(pred);
   }catch(e){return 0;}
 }
 
@@ -1354,7 +1466,7 @@ function bracketSVG(pid,pred){
   svg+=`<rect width="${svgW}" height="${svgH}" fill="none"/>`;
 
   // Round labels
-  const rLabels=["R32","OCTAVOS","CUARTOS","SEMIS","FINAL","SEMIS","CUARTOS","OCTAVOS","R32"];
+  const rLabels=["16VOS","OCTAVOS","CUARTOS","SEMIS","FINAL","SEMIS","CUARTOS","OCTAVOS","16VOS"];
   const cxs=[0,1,2,3,4,5,6,7,8].map(i=>10+i*(TW+RGAP));
   rLabels.forEach((l,i)=>{
     svg+=`<text class="br-rlbl" x="${cxs[i]+TW/2}" y="18" text-anchor="middle">${l}</text>`;
@@ -1659,23 +1771,26 @@ function pgLanding(){
       <div style="font-size:.6rem;letter-spacing:2px;color:#88aaff;font-weight:700;margin-bottom:.45rem">🏟️ FASE ELIMINATORIA</div>
       <div style="display:flex;flex-direction:column;gap:.22rem">
         ${[
-          ["R32","10","+10 por equipo que avanza"],
-          ["Octavos","15","+15 por equipo que avanza"],
-          ["Cuartos","20","+20 por equipo que avanza"],
-          ["Semis","25","+25 por equipo que avanza"],
-          ["Campeón","30","+30 por el campeón correcto"],
-          ["Subcampeón","20","+20 por el subcampeón correcto"],
-          ["3er Lugar","15","+15 por el tercer lugar correcto"],
-        ].map(([rnd,pts,desc])=>`
-        <div style="display:flex;align-items:center;gap:.6rem;padding:.3rem .5rem;background:rgba(255,255,255,.03);border-radius:7px">
-          <div style="font-size:.65rem;color:#889;min-width:68px">${rnd}</div>
-          <div style="font-size:.88rem;font-weight:700;color:#88aaff;min-width:22px;text-align:center">+${pts}</div>
-          <div style="font-size:.68rem;color:rgba(255,255,255,.45)">${desc}</div>
+          ["De grupos → 16vos",  "8",  "Por cada equipo que predijiste clasificado de grupos","#4de0a0"],
+          ["De 16vos → Octavos", "10", "Por cada equipo que predijiste ganando en 16vos",     "#88aaff"],
+          ["De Octavos → Cuartos","15","Por cada equipo que predijiste ganando en Octavos",    "#88aaff"],
+          ["De Cuartos → Semis", "20", "Por cada equipo que predijiste ganando en Cuartos",    "#88aaff"],
+          ["De Semis → Final",   "25", "Por cada equipo que predijiste ganando en Semis",      "#88aaff"],
+          ["Finalista acertado", "30", "Por cada equipo que predijiste que llega a la Final",  "#ffd580"],
+          ["Campeón",            "40", "Por acertar el campeón del mundo",                     "#ffc800"],
+          ["Subcampeón",         "30", "Por acertar el subcampeón",                            "#ccc"],
+          ["3er Lugar",          "20", "Por acertar el tercer puesto",                         "#cd7f32"],
+          ["4to Lugar",          "10", "Por acertar el cuarto puesto",                         "#888"],
+        ].map(([rnd,pts,desc,col])=>`
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.32rem .5rem;background:rgba(255,255,255,.03);border-radius:7px">
+          <div style="font-size:.67rem;color:#889;min-width:78px;line-height:1.3">${rnd}</div>
+          <div style="font-size:.92rem;font-weight:800;color:${col};min-width:24px;text-align:center">+${pts}</div>
+          <div style="font-size:.67rem;color:rgba(255,255,255,.4);line-height:1.3">${desc}</div>
         </div>`).join("")}
       </div>
       <div style="margin-top:.7rem;padding:.5rem .7rem;background:rgba(255,200,0,.07);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:.7rem;color:rgba(255,255,255,.45)">Puntuación máxima posible</span>
-        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">590 pts</span>
+        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">1.186 pts</span>
       </div>
     </div>
   </div>
@@ -1715,7 +1830,7 @@ function pgLanding(){
         ["11 Jun","3:00 PM ET","Cierre de registro",true],
         ["11 Jun","16:00 ET","Primer partido · México vs Sudáfrica",false],
         ["11 Jun – 27 Jun","—","Fase de Grupos (72 partidos)",false],
-        ["28 Jun – 3 Jul","—","Ronda de 32",false],
+        ["28 Jun – 3 Jul","—","16vos de Final",false],
         ["4 – 7 Jul","—","Octavos de Final",false],
         ["10 – 13 Jul","—","Cuartos de Final",false],
         ["16 – 17 Jul","—","Semifinales",false],
@@ -1879,7 +1994,7 @@ function pgPredict(pid){
   // Detailed missing list
   const missing=[];
   if(!groupsDone) missing.push(`⚽ Grupos: faltan ${groupsMissing} partido${groupsMissing!==1?"s":""}`);
-  if(!r32RegDone) missing.push(`⚔️ R32: ${8-r32RegPicks} partido${8-r32RegPicks!==1?"s":""} sin ganador`);
+  if(!r32RegDone) missing.push(`⚔️ 16vos: ${8-r32RegPicks} partido${8-r32RegPicks!==1?"s":""} sin ganador`);
   if(!r16Done) missing.push(`🎯 Octavos: ${8-r16Count} partido${8-r16Count!==1?"s":""} sin ganador`);
   if(!qfDone) missing.push(`🏟 Cuartos: ${4-qfCount} partido${4-qfCount!==1?"s":""} sin ganador`);
   if(!sfDone) missing.push(`🔥 Semis: ${2-sfCount} partido${2-sfCount!==1?"s":""} sin ganador`);
@@ -1980,8 +2095,8 @@ function pgPredict(pid){
           Elige el ganador de cada partido en la fase eliminatoria.<br><br>
           <strong style="color:#ffc800">🟡 Terceros lugares — automático:</strong><br>
           Los 8 mejores terceros se calculan desde tus predicciones de grupos y se asignan automáticamente a cada llave según la tabla oficial de FIFA (Anexo C). ¡No necesitas hacer nada!<br><br>
-          <strong style="color:#eee">Luego:</strong> elige ganadores de R32 → Octavos → Cuartos → Semis → Final y 3er lugar.<br><br>
-          <span style="color:#88aaff;font-size:.75rem">+10 R32 · +15 Octavos · +20 Cuartos · +25 Semis · +30 Campeón · +20 Sub · +15 3°</span>
+          <strong style="color:#eee">Luego:</strong> elige ganadores de 16vos → Octavos → Cuartos → Semis → Final y 3er lugar.<br><br>
+          <span style="color:#88aaff;font-size:.75rem">+8 Clasif. grupos · +10 De 16vos · +15 Octavos · +20 Cuartos · +25 Semis · +30 Final · +40 Campeón</span>
         </div>
 
         <div style="background:rgba(0,200,83,.07);border-radius:9px;padding:.7rem .8rem">
@@ -2292,10 +2407,12 @@ function pgMyScore(pid){
       try{ B=buildBracket(pred.groups||{},ko); }catch(e){}
 
       // Score summary bar
-      let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:1rem;align-items:center">
-        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+kPts} pts</div></div>
+      const gAdvPts2=scoreGroupAdvancement(pred);
+      let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+gAdvPts2+kPts} pts</div></div>
         <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
         <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">GRUPOS</div><div style="font-size:.9rem;font-weight:700;color:#4de0a0">+${gPts}</div></div>
+        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">CLASIF.</div><div style="font-size:.9rem;font-weight:700;color:#ffd580">+${gAdvPts2}</div></div>
         <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
       </div>`;
 
@@ -2347,12 +2464,17 @@ function pgMyScore(pid){
       });
 
       // Podio (Final + 3rd)
+      const actualFinalistList=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
       const podioItems=[
-        {key:"final", idx:0, label:"🏆 Campeón",    pts:30, col:"#ffc800",
+        {key:"finalist0", label:"⬛ Finalista",     pts:30, col:"#88aaff",
+         pTeam:(ko.final||{})[0]||null, aTeam:actualFinalistList.length?((ko.final||{})[0]&&actualFinalistList.includes((ko.final||{})[0])?(ko.final||{})[0]:null):null},
+        {key:"finalist1", label:"⬛ Finalista",     pts:30, col:"#88aaff",
+         pTeam:(ko.final||{})[1]||null, aTeam:actualFinalistList.length?((ko.final||{})[1]&&actualFinalistList.includes((ko.final||{})[1])?(ko.final||{})[1]:null):null},
+        {key:"final", idx:0, label:"🏆 Campeón",    pts:40, col:"#ffc800",
          pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
-        {key:"final", idx:1, label:"🥈 Subcampeón",  pts:20, col:"#aaa",
+        {key:"final", idx:1, label:"🥈 Subcampeón",  pts:30, col:"#aaa",
          pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
-        {key:"f3",   idx:0, label:"🥉 3er Lugar",   pts:15, col:"#cd7f32",
+        {key:"f3",   idx:0, label:"🥉 3er Lugar",   pts:20, col:"#cd7f32",
          pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
       ].filter(x=>x.pTeam);
 
@@ -3032,11 +3154,13 @@ function pgLeaderboard(tab){
     ${sel?(()=>{const p=scored.find(x=>x.id===sel);if(!p)return"";const pred=STATE.predictions[p.id]||{};
       const gPts=scoreGroups(pred.groups||{},STATE.actuals);
       const kPts=scoreKO(pred);
+      const gAdvPts=scoreGroupAdvancement(pred);
       return `<div class="score-banner" style="margin-bottom:.7rem">
         <div class="score-big">${p.pts}</div>
         <div style="font-size:.78rem;color:#889;margin-top:.2rem">${p.name}</div>
-        <div style="font-size:.7rem;margin-top:.25rem;display:flex;gap:.5rem;justify-content:center">
+        <div style="font-size:.7rem;margin-top:.25rem;display:flex;gap:.4rem;justify-content:center;flex-wrap:wrap">
           <span style="color:#4de0a0">⚽ Grupos: +${gPts}</span>
+          <span style="color:#ffd580">🎯 Clasif: +${gAdvPts}</span>
           <span style="color:#88aaff">🏆 KO: +${kPts}</span>
         </div>
       </div>
@@ -3047,38 +3171,78 @@ function pgLeaderboard(tab){
 
       ${grp==="KO"?`
       ${(()=>{
-        const rows=scoreKODetail(pred);
-        if(!rows.length) return `<div style="text-align:center;padding:1rem;font-size:.78rem;color:#667">No hay resultados KO cargados aún.</div>`;
-        // Group rows by round
-        const byRound={};
-        rows.forEach(r=>{ if(!byRound[r.round]) byRound[r.round]=[]; byRound[r.round].push(r); });
-        const roundPts={};
-        rows.forEach(r=>{ roundPts[r.round]=(roundPts[r.round]||0)+r.pts; });
-        return Object.entries(byRound).map(([round,rrows])=>`
-          <div style="margin-bottom:.6rem">
-            <div style="display:flex;align-items:center;gap:.5rem;margin:.4rem 0 .2rem">
-              <span style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px">${round.toUpperCase()}</span>
-              <span style="font-size:.65rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.05rem .35rem">+${roundPts[round]} pts</span>
-            </div>
-            ${rrows.map(r=>`
-            <div style="display:flex;align-items:center;gap:.45rem;padding:.3rem .5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:7px;margin-bottom:.2rem">
-              <span style="font-size:1rem;flex-shrink:0">${r.ok?"✅":"❌"}</span>
+        const ko=pred.ko||{};
+        const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+        const rounds=[
+          {key:"r32", label:"Ronda de 32",     pts:10},
+          {key:"r16", label:"Octavos de Final", pts:15},
+          {key:"qf",  label:"Cuartos de Final", pts:20},
+          {key:"sf",  label:"Semifinales",      pts:25},
+        ];
+        let html="";
+        rounds.forEach(r=>{
+          const pick=ko[r.key]||{};
+          const actual=aKO[r.key]||{};
+          const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
+          if(!pickEntries.length) return;
+          let correct=0;
+          const rows=pickEntries.map(([idx,pTeam])=>{
+            const aTeam=actual[String(idx)]||null;
+            const ok=aTeam&&pTeam===aTeam;
+            const unknown=!aTeam;
+            if(ok) correct++;
+            return `<div style="display:flex;align-items:center;gap:.45rem;padding:.3rem .5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:7px;margin-bottom:.2rem">
+              <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
               <div style="flex:1;min-width:0">
-                <div style="font-size:.75rem;color:#eee">Real: ${f(r.aTeam)} ${r.aTeam}</div>
-                <div style="font-size:.68rem;color:${r.ok?"#4de0a0":"#ff8080"}">Predicción: ${r.pTeam!=="—"?f(r.pTeam)+" ":""}${r.pTeam}</div>
+                <div style="font-size:.75rem;color:#eee;font-weight:600">${f(pTeam)} ${pTeam}</div>
+                ${aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Pasó: ${f(aTeam)} ${aTeam}</div>`:""}
               </div>
-              <span style="font-size:.85rem;font-weight:700;color:${r.ok?"#4de0a0":"#556"};flex-shrink:0">+${r.pts}</span>
-            </div>`).join("")}
-          </div>`).join("")
-         + `<div style="margin-top:.5rem;padding:.5rem .7rem;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.2);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:.75rem;color:#ffc800;font-weight:700">Total KO</span>
-              <span style="font-size:1rem;font-weight:700;color:#ffc800">+${kPts} pts</span>
-            </div>
-            <div style="margin-top:.6rem">
-              <div style="font-size:.68rem;font-weight:700;color:#88aaff;letter-spacing:.5px;margin-bottom:.3rem">BRACKET</div>
-              ${bracketSVG("view",pred)}
+              <span style="font-size:.85rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"};flex-shrink:0">${unknown?"?":ok?"+"+r.pts:"0"}</span>
             </div>`;
-      })()}
+          }).join("");
+          const actualsExist=Object.keys(actual).length>0;
+          html+=`<div style="margin-bottom:.6rem">
+            <div style="display:flex;align-items:center;gap:.5rem;margin:.4rem 0 .2rem">
+              <span style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px">${r.label.toUpperCase()}</span>
+              <span style="font-size:.62rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.05rem .3rem">+${r.pts} c/u</span>
+              ${actualsExist?`<span style="font-size:.62rem;color:#667;margin-left:auto">${correct}/${Object.keys(actual).length} ✓ · +${correct*r.pts}</span>`:`<span style="font-size:.62rem;color:#556;margin-left:auto">${pickEntries.length} picks</span>`}
+            </div>
+            ${rows}
+          </div>`;
+        });
+        // Podio
+        const aFinalistList2=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
+        const podioItems=[
+          {label:"⬛ Finalista",  pts:30, col:"#88aaff", pTeam:(ko.final||{})[0]||null, aTeam:aFinalistList2.includes((ko.final||{})[0])?(ko.final||{})[0]:null},
+          {label:"⬛ Finalista",  pts:30, col:"#88aaff", pTeam:(ko.final||{})[1]||null, aTeam:aFinalistList2.includes((ko.final||{})[1])?(ko.final||{})[1]:null},
+          {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
+          {label:"🥈 Subcampeón", pts:30, col:"#aaa",    pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
+          {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
+        ].filter(x=>x.pTeam);
+        if(podioItems.length){
+          html+=`<div style="margin-bottom:.6rem"><div style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px;margin:.4rem 0 .3rem">PODIO</div>`;
+          podioItems.forEach(x=>{
+            const ok=x.aTeam&&x.pTeam===x.aTeam;
+            const unknown=!x.aTeam;
+            html+=`<div style="display:flex;align-items:center;gap:.45rem;padding:.35rem .5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:7px;margin-bottom:.2rem">
+              <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.65rem;color:${x.col};font-weight:700">${x.label}</div>
+                <div style="font-size:.75rem;color:#eee">${f(x.pTeam)} ${x.pTeam}</div>
+                ${x.aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Real: ${f(x.aTeam)} ${x.aTeam}</div>`:""}
+              </div>
+              <span style="font-size:.85rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"}">${unknown?"?":ok?"+"+x.pts:"0"}</span>
+            </div>`;
+          });
+          html+=`</div>`;
+        }
+        if(!html) return `<div style="text-align:center;padding:1.5rem;font-size:.78rem;color:#667">📋 Este participante no ha llenado el bracket aún.</div>`;
+        html+=`<div style="margin-top:.5rem;padding:.5rem .7rem;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.2);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:.75rem;color:#ffc800;font-weight:700">Total KO</span>
+          <span style="font-size:1rem;font-weight:700;color:#ffc800">+${kPts} pts</span>
+        </div>`;
+        return html;
+      })()}      })()}
       `:`
       <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
       ${MATCHES.filter(m=>m.g===grp).map(m=>{
