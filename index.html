@@ -913,6 +913,8 @@ function scoreKODetail(pred){
 function scoreFull(pid){
   try{
     const pred=STATE.predictions[pid]||{};
+  if(!pred.groups) pred.groups={};
+  if(!pred.ko) pred.ko={};
     const actuals=STATE.actuals||{};
     return scoreGroups(pred.groups||{}, actuals) + scoreKO(pred);
   }catch(e){return 0;}
@@ -1833,9 +1835,11 @@ function pgPredict(pid){
   const p=STATE.participants.find(x=>x.id===pid);
   if(!p){go("landing");return""}
   const pred=STATE.predictions[pid]||{groups:{},ko:{},quinName:"",submitted:false};
+  if(!pred.groups) pred.groups={};
+  if(!pred.ko) pred.ko={};
   const tab=ROUTE.subtab||"groups";
   const grp=ROUTE.grp||"A";
-  const filled=MATCHES.filter(m=>{const s=pred.groups[m.id];return s&&s.h!==""&&s.a!=="";}).length;
+  const filled=MATCHES.filter(m=>{const s=(pred.groups||{})[m.id];return s&&s.h!==""&&s.a!=="";}).length;
 
   // ── Completeness check — detailed per section ──
   const ko=pred.ko||{};
@@ -1888,7 +1892,7 @@ function pgPredict(pid){
     const gm=MATCHES.filter(m=>m.g===grp);
     body=`<div class="grp-tabs">${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('predict',{pid:'${pid}',subtab:'groups',grp:'${g}'})">${g}</button>`).join("")}</div>
     <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
-    ${gm.map(m=>{const s=pred.groups[m.id]||{h:"",a:""};
+    ${gm.map(m=>{const s=(pred.groups||{})[m.id]||{h:"",a:""};
       return `<div class="match">
         <div class="tn">${f(m.h)} ${trunc(m.h,11)}</div>
         <div class="si">
@@ -2201,6 +2205,8 @@ function pgMyScore(pid){
   const p=STATE.participants.find(x=>x.id===pid);
   if(!p){go("landing");return""}
   const pred=STATE.predictions[pid]||{};
+  if(!pred.groups) pred.groups={};
+  if(!pred.ko) pred.ko={};
   const gPts=scoreGroups(pred.groups||{},STATE.actuals);
   const qn=pred.quinName||"Mi Quiniela";
   const tab=ROUTE.subtab||"hoy";
@@ -2854,7 +2860,7 @@ function adminStats(ps){
     const pred=STATE.predictions[p.id];
     let exact=0,correct=0,wrong=0,pts=0;
     playedMatches.forEach(m=>{
-      const pr=pred.groups?.[m.id], ac=STATE.actuals[m.id];
+      const pr=pred.groups?.[m.id], ac=(STATE.actuals||{})[m.id];
       if(!pr||pr.h===""||pr.a==="") return;
       const ph=parseInt(pr.h),pa=parseInt(pr.a),ah=parseInt(ac.h),aa=parseInt(ac.a);
       if(ph===ah&&pa===aa){exact++;pts+=5;}
@@ -3056,7 +3062,7 @@ function pgLeaderboard(tab){
       `:`
       <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
       ${MATCHES.filter(m=>m.g===grp).map(m=>{
-        const pr=pred.groups?.[m.id],ac=STATE.actuals[m.id];let badge="";
+        const pr=pred.groups?.[m.id],ac=(STATE.actuals||{})[m.id];let badge="";
         if(pr&&ac&&pr.h!==""&&pr.a!==""&&ac.h!==""&&ac.a!==""){
           const ph=parseInt(pr.h),pa=parseInt(pr.a),ah=parseInt(ac.h),aa=parseInt(ac.a);
           if(ph===ah&&pa===aa)badge=`<span style="background:#00c853;color:#000;border-radius:3px;padding:0 4px;font-size:.6rem;font-weight:700">+5</span>`;
@@ -3086,7 +3092,7 @@ function bindEvents(){
       // Update standings table live
       const grp=MATCHES.find(m=>m.id===mid)?.g;
       const el=document.getElementById("st-"+grp);
-      if(el)el.innerHTML=stTable(calcStandings(grp,pred.groups));
+      if(el)el.innerHTML=stTable(calcStandings(grp,pred.groups||{}));
     });
   });
   // Admin actual score inputs — update standings live
@@ -3127,6 +3133,8 @@ function submitPrediction(pid){
 function sendConfirmationEmail(pid){
   const p=STATE.participants.find(x=>x.id===pid);
   const pred=STATE.predictions[pid]||{};
+  if(!pred.groups) pred.groups={};
+  if(!pred.ko) pred.ko={};
   if(!p||!p.email) return;
 
   // Rate limit: only send once per participant
@@ -3405,6 +3413,8 @@ function buildPDFDoc(pid){
   const p=STATE.participants.find(x=>x.id===pid);
   if(!p) return null;
   const pred=STATE.predictions[pid]||{};
+  if(!pred.groups) pred.groups={};
+  if(!pred.ko) pred.ko={};
   const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
   const W=297,H=210,M=8;
 
