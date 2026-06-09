@@ -1101,23 +1101,6 @@ function initFirebase(){
       if(window._fbPaused) return;
       const val=snap.val();
 
-      // Remote reset detection via actuals._resetAt
-      const resetAt=(val&&val.actuals&&val.actuals._resetAt) ? val.actuals._resetAt : 0;
-      if(resetAt){
-        const lastSeenReset=parseInt(localStorage.getItem("q2026_lastReset")||"0");
-        if(resetAt > lastSeenReset){
-          localStorage.setItem("q2026_lastReset", String(resetAt));
-          const hadData=localStorage.getItem(LS);
-          if(hadData){
-            console.log("🔄 Reset remoto detectado — limpiando caché local");
-            localStorage.removeItem(LS);
-            localStorage.removeItem(SESSION_KEY);
-            location.reload();
-            return;
-          }
-        }
-      }
-
       if(!val) return;
 
       if(val.participants) STATE.participants=Object.values(val.participants);
@@ -1173,7 +1156,16 @@ function fbWriteParticipant(pid){
 function fbWriteActuals(){
   localStorage.setItem(LS,JSON.stringify(STATE));
   if(!window._fbDB) return;
-  window._fbDB.ref("q2026/actuals").set(STATE.actuals||{}).catch(function(e){
+  const actuals=STATE.actuals||{};
+  // Safety guard: never overwrite Firebase actuals with empty data
+  const hasGroupResults=Object.keys(actuals).some(function(k){return k!=='_resetAt'&&k!=='_ko';});
+  const hasKOResults=actuals._ko&&Object.keys(actuals._ko).length>0;
+  if(!hasGroupResults&&!hasKOResults){
+    // Nothing real to write — just save locally
+    console.log("fbWriteActuals: no data to write, skipping Firebase");
+    return;
+  }
+  window._fbDB.ref("q2026/actuals").set(actuals).catch(function(e){
     console.warn("fbWriteActuals failed:",e.message);
   });
 }
@@ -3385,25 +3377,24 @@ function adminRemoveFromLeague(pid,lid){
   go("admin",{tab:"participants"});
 }
 function resetAll(){
-  if(!confirm("⚠️ ¿Borrar TODOS los datos?"))return;
+  if(!confirm("⚠️ ¿Borrar TODOS los datos locales y de Firebase?"))return;
   const conf=prompt('Escribe "BORRAR" para confirmar:');
   if(conf!=="BORRAR"){showFlash("❌ Cancelado — escribe BORRAR exactamente");return;}
 
-  window._fbPaused=true;
+  // Clear local state and session
   STATE={participants:[],predictions:{},actuals:{},leagues:[]};
   localStorage.removeItem(LS);
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem("q2026_lastReset");
 
+  // Clear Firebase — each node individually (required by security rules)
   if(window._fbDB){
-    const resetAt=Date.now();
-    localStorage.setItem("q2026_lastReset",String(resetAt));
-    window._fbDB.ref("q2026/actuals").set({_resetAt:resetAt})
-      .then(function(){
-        setTimeout(function(){window._fbPaused=false;},2000);
-      }).catch(function(){window._fbPaused=false;});
+    window._fbDB.ref("q2026/actuals").remove().catch(function(){});
+    // Note: participants, predictions, leagues must be deleted individually
+    // or from Firebase Console since rules don't allow bulk delete
   }
 
-  showFlash("✓ Datos borrados");
+  showFlash("✓ Caché local borrado. Borra participantes desde Firebase Console si es necesario.");
   go("landing");
 }
 
