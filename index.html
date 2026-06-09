@@ -2285,18 +2285,13 @@ function pgMyScore(pid){
       const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
       const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
       const kPts=scoreKO(pred);
-      const rounds=[
-        {key:"r32",  label:"Ronda de 32",    pts:10},
-        {key:"r16",  label:"Octavos de Final",pts:15},
-        {key:"qf",   label:"Cuartos de Final",pts:20},
-        {key:"sf",   label:"Semifinales",     pts:25},
-      ];
-      const hasAny=rounds.some(r=>Object.keys(aKO[r.key]||{}).length>0)||aKO.final?.[0]||aKO.f3?.[0];
-      if(!hasAny) return `<div style="text-align:center;padding:2rem .8rem;color:#889;font-size:.82rem">
-        <div style="font-size:2rem;margin-bottom:.5rem">⏳</div>
-        Los resultados de la fase eliminatoria aún no han sido cargados.
-      </div>`;
+      const hasActuals=Object.keys(aKO).some(k=>Object.keys(aKO[k]||{}).length>0);
 
+      // Build bracket to get match context (which teams play each other)
+      let B=null;
+      try{ B=buildBracket(pred.groups||{},ko); }catch(e){}
+
+      // Score summary bar
       let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:1rem;align-items:center">
         <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+kPts} pts</div></div>
         <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
@@ -2304,66 +2299,91 @@ function pgMyScore(pid){
         <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
       </div>`;
 
+      // Rounds config
+      const rounds=[
+        {key:"r32", label:"Ronda de 32",     pts:10, matches:B?B.r32:[]},
+        {key:"r16", label:"Octavos de Final", pts:15, matches:B?B.r16:[]},
+        {key:"qf",  label:"Cuartos de Final", pts:20, matches:B?B.qf:[]},
+        {key:"sf",  label:"Semifinales",      pts:25, matches:B?B.sf:[]},
+      ];
+
       rounds.forEach(r=>{
-        const actual=aKO[r.key]||{};
-        if(!Object.keys(actual).length) return;
         const pick=ko[r.key]||{};
-        let correct=0,total=Object.keys(actual).length;
-        const rows=Object.keys(actual).sort((a,b)=>+a-+b).map(idx=>{
-          const aTeam=actual[idx];
-          const pTeam=pick[String(idx)]||null;
+        const actual=aKO[r.key]||{};
+        // Only show rounds where user made picks OR actuals exist
+        const picksExist=Object.keys(pick).length>0;
+        const actualsExist=Object.keys(actual).length>0;
+        if(!picksExist&&!actualsExist) return;
+
+        // Build rows from user's picks
+        const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
+        if(!pickEntries.length) return;
+
+        let correct=0;
+        const rows=pickEntries.map(([idx,pTeam])=>{
+          const aTeam=actual[String(idx)]||null;
           const ok=aTeam&&pTeam===aTeam;
+          const unknown=!aTeam;
           if(ok) correct++;
           return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem .4rem;border-radius:7px;background:rgba(255,255,255,.03);margin-bottom:.18rem">
-            <span style="font-size:1rem;flex-shrink:0">${ok?"✅":"❌"}</span>
+            <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-size:.75rem;color:#eee">${f(aTeam)} ${aTeam}</div>
-              <div style="font-size:.67rem;color:${ok?"#4de0a0":"#ff8080"}">${pTeam?f(pTeam)+" "+pTeam:"— Sin predicción"}</div>
+              <div style="font-size:.78rem;color:#eee;font-weight:600">${f(pTeam)} ${pTeam}</div>
+              ${aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Pasó: ${f(aTeam)} ${aTeam}</div>`:""}
             </div>
-            <span style="font-size:.82rem;font-weight:700;color:${ok?"#4de0a0":"#445"};flex-shrink:0">+${ok?r.pts:0}</span>
+            <span style="font-size:.82rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"};flex-shrink:0">${unknown?"?":ok?"+"+r.pts:"0"}</span>
           </div>`;
         }).join("");
+
+        const total=actualsExist?Object.keys(actual).length:pickEntries.length;
         html+=`<div style="margin-bottom:.7rem">
           <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">
             <span style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px">${r.label.toUpperCase()}</span>
             <span style="font-size:.62rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.05rem .3rem">+${r.pts} c/u</span>
-            <span style="font-size:.62rem;color:#667;margin-left:auto">${correct}/${total} correctos · +${correct*r.pts} pts</span>
+            ${actualsExist?`<span style="font-size:.62rem;color:#667;margin-left:auto">${correct}/${total} ✓ · +${correct*r.pts} pts</span>`:`<span style="font-size:.62rem;color:#556;margin-left:auto">${pickEntries.length} picks</span>`}
           </div>
           ${rows}
         </div>`;
       });
 
-      // Final, runner-up, 3rd
-      const finalItems=[
-        {key:"final",idx:0, label:"Campeón",     pts:30, col:"#ffc800"},
-        {key:"final",idx:1, label:"Subcampeón",  pts:20, col:"#aaa"},
-        {key:"f3",   idx:0, label:"3er Lugar",   pts:15, col:"#cd7f32"},
-      ];
-      const podioRows=finalItems.filter(x=>{
-        const src=x.key==="final"?aKO.final:aKO.f3;
-        return src&&src[x.idx];
-      });
-      if(podioRows.length){
+      // Podio (Final + 3rd)
+      const podioItems=[
+        {key:"final", idx:0, label:"🏆 Campeón",    pts:30, col:"#ffc800",
+         pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
+        {key:"final", idx:1, label:"🥈 Subcampeón",  pts:20, col:"#aaa",
+         pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
+        {key:"f3",   idx:0, label:"🥉 3er Lugar",   pts:15, col:"#cd7f32",
+         pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
+      ].filter(x=>x.pTeam);
+
+      if(podioItems.length){
         html+=`<div style="margin-bottom:.7rem">
           <div style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px;margin-bottom:.3rem">PODIO</div>`;
-        podioRows.forEach(x=>{
-          const src=x.key==="final"?aKO.final:aKO.f3;
-          const psrc=x.key==="final"?ko.final:ko.f3;
-          const aTeam=src[x.idx];
-          const pTeam=psrc?psrc[x.idx]:null;
-          const ok=aTeam&&pTeam===aTeam;
-          html+=`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem .4rem;border-radius:7px;background:rgba(255,255,255,.03);margin-bottom:.18rem">
-            <span style="font-size:1rem;flex-shrink:0">${ok?"✅":"❌"}</span>
+        podioItems.forEach(x=>{
+          const ok=x.aTeam&&x.pTeam===x.aTeam;
+          const unknown=!x.aTeam;
+          html+=`<div style="display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);margin-bottom:.25rem">
+            <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-size:.68rem;color:${x.col};font-weight:700">${x.label}</div>
-              <div style="font-size:.75rem;color:#eee">${f(aTeam)} ${aTeam}</div>
-              <div style="font-size:.67rem;color:${ok?"#4de0a0":"#ff8080"}">${pTeam?f(pTeam)+" "+pTeam:"— Sin predicción"}</div>
+              <div style="font-size:.65rem;color:${x.col};font-weight:700;margin-bottom:.1rem">${x.label}</div>
+              <div style="font-size:.78rem;color:#eee">${f(x.pTeam)} ${x.pTeam}</div>
+              ${x.aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Real: ${f(x.aTeam)} ${x.aTeam}</div>`:""}
             </div>
-            <span style="font-size:.82rem;font-weight:700;color:${ok?"#4de0a0":"#445"};flex-shrink:0">+${ok?x.pts:0}</span>
+            <span style="font-size:.85rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"}">
+              ${unknown?"?":ok?"+"+x.pts:"0"}
+            </span>
           </div>`;
         });
         html+=`</div>`;
       }
+
+      if(!Object.keys(ko).some(k=>ko[k]&&Object.keys(ko[k]).length>0)&&!podioItems.length){
+        html+=`<div style="text-align:center;padding:1.5rem .8rem;color:#889;font-size:.82rem">
+          <div style="font-size:2rem;margin-bottom:.5rem">📋</div>
+          Aún no has llenado el bracket de la fase final.
+        </div>`;
+      }
+
       return html;
     })()}
     `:`
