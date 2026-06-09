@@ -882,7 +882,8 @@ function scoreKO(pred){
     let p=0;
 
     // R32→SF
-    const rounds={r32:10, r16:15, qf:20, sf:25};
+    // R32→QF per round (SF removed — covered by Clasificado a Final below)
+    const rounds={r32:10, r16:15, qf:20};
     Object.entries(rounds).forEach(([rnd,pts])=>{
       const actual=aKO[rnd]||{};
       const pick=ko[rnd]||{};
@@ -891,14 +892,17 @@ function scoreKO(pred){
       });
     });
 
+    // Clasificado a Final: +30 per team correctly predicted to reach the Final
+    // Uses SF picks (ko.sf[0] and ko.sf[1]) — the semi-final winners = finalists
     const aFinal=aKO.final||{};
     const pFinal=ko.final||{};
     const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
-
-    // +30 per team correctly predicted IN the final (regardless of position)
+    const aSF=aKO.sf||{};
+    const pSF=ko.sf||{};
+    // A finalist is correctly predicted if their SF pick matches actual SF winner
     if(actualFinalists.length>0){
-      if(pFinal[0]&&actualFinalists.includes(pFinal[0])) p+=30;
-      if(pFinal[1]&&actualFinalists.includes(pFinal[1])) p+=30;
+      if(pSF[0]&&actualFinalists.includes(pSF[0])) p+=30;
+      if(pSF[1]&&actualFinalists.includes(pSF[1])) p+=30;
     }
     // +40 Champion exact
     if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=40;
@@ -943,7 +947,8 @@ function scoreKODetail(pred){
         });
       }
     }catch(e){}
-    const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"},sf:{pts:25,label:"Semis"}};
+    // SF removed from per-round scoring — covered by "Clasificado a Final" below
+    const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"}};
     Object.entries(rounds).forEach(([rnd,cfg])=>{
       const actual=aKO[rnd]||{};
       const pick=ko[rnd]||{};
@@ -955,15 +960,16 @@ function scoreKODetail(pred){
       });
     });
     const aFinal=aKO.final||{}, pFinal=ko.final||{};
+    const aSF2=aKO.sf||{}, pSF2=ko.sf||{};
     const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
-    // Finalist bonus (+30 each)
-    if(aFinal[0]){
-      const ok0=actualFinalists.includes(pFinal[0]);
-      rows.push({round:"Finalista",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:ok0?30:0,ok:ok0});
-    }
-    if(aFinal[1]){
-      const ok1=actualFinalists.includes(pFinal[1]);
-      rows.push({round:"Finalista",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:ok1?30:0,ok:ok1});
+    // Clasificado a Final: +30 per correct finalist using SF picks
+    if(actualFinalists.length>0){
+      [0,1].forEach(i=>{
+        if(!aSF2[i]) return;
+        const aTeam=aSF2[i], pTeam=pSF2[i]||"—";
+        const ok=actualFinalists.includes(pTeam);
+        rows.push({round:"Clasificado a Final",idx:i,aTeam,pTeam,pts:ok?30:0,ok});
+      });
     }
     // Champion +40
     if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?40:0,ok:pFinal[0]===aFinal[0]});
@@ -1775,7 +1781,7 @@ function pgLanding(){
           ["De 16vos → Octavos", "10", "Por cada equipo que predijiste ganando en 16vos",     "#88aaff"],
           ["De Octavos → Cuartos","15","Por cada equipo que predijiste ganando en Octavos",    "#88aaff"],
           ["De Cuartos → Semis", "20", "Por cada equipo que predijiste ganando en Cuartos",    "#88aaff"],
-          ["De Semis → Final",   "25", "Por cada equipo que predijiste ganando en Semis",      "#88aaff"],
+          ["De Semis → Final",   "30", "Por cada equipo que clasifica a la Final",              "#ffd580"],
           ["Finalista acertado", "30", "Por cada equipo que predijiste que llega a la Final",  "#ffd580"],
           ["Campeón",            "40", "Por acertar el campeón del mundo",                     "#ffc800"],
           ["Subcampeón",         "30", "Por acertar el subcampeón",                            "#ccc"],
@@ -1790,7 +1796,7 @@ function pgLanding(){
       </div>
       <div style="margin-top:.7rem;padding:.5rem .7rem;background:rgba(255,200,0,.07);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:.7rem;color:rgba(255,255,255,.45)">Puntuación máxima posible</span>
-        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">1.186 pts</span>
+        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">1.196 pts</span>
       </div>
     </div>
   </div>
@@ -2421,7 +2427,7 @@ function pgMyScore(pid){
         {key:"r32", label:"Ronda de 32",     pts:10, matches:B?B.r32:[]},
         {key:"r16", label:"Octavos de Final", pts:15, matches:B?B.r16:[]},
         {key:"qf",  label:"Cuartos de Final", pts:20, matches:B?B.qf:[]},
-        {key:"sf",  label:"Semifinales",      pts:25, matches:B?B.sf:[]},
+        {key:"sf",  label:"Clasificado a Final", pts:30, matches:B?B.sf:[]},
       ];
 
       rounds.forEach(r=>{
@@ -3177,7 +3183,7 @@ function pgLeaderboard(tab){
           {key:"r32", label:"Ronda de 32",     pts:10},
           {key:"r16", label:"Octavos de Final", pts:15},
           {key:"qf",  label:"Cuartos de Final", pts:20},
-          {key:"sf",  label:"Semifinales",      pts:25},
+          {key:"sf",  label:"Clasificado a Final", pts:30},
         ];
         let html="";
         rounds.forEach(r=>{
