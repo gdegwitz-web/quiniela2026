@@ -2348,6 +2348,8 @@ function pgMyScore(pid){
   const tab=ROUTE.subtab||"hoy";
   const grp=ROUTE.grp||"A";
 
+  const myLeagues=STATE.leagues.filter(l=>l.memberIds&&l.memberIds.includes(pid));
+  const hasProbLeague=myLeagues.some(l=>l.showProb);
   return `<div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;justify-content:space-between;margin:0 -.8rem .8rem">
     <div>
       <div style="font-size:1rem;font-weight:700;color:#ffc800">${p.name}</div>
@@ -2356,11 +2358,12 @@ function pgMyScore(pid){
     </div>
     <button class="btn-gray" style="width:auto;padding:.28rem .65rem;font-size:.72rem" onclick="logout()">SALIR</button>
   </div>
-  <div class="tabs" style="overflow-x:auto;white-space:nowrap">
-    <button class="tab${tab==="hoy"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'hoy'})">📅 HOY</button>
-    <button class="tab${tab==="score"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'score'})">🏆 PUNTAJE</button>
-    <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})">📋 PREDICCIONES</button>
-    <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})">🏅 MIS LIGAS</button>
+  <div class="tabs" style="white-space:nowrap">
+    <button class="tab${tab==="hoy"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'hoy'})" style="font-size:.62rem;padding:5px 2px">📅<br><span style="font-size:.55rem">HOY</span></button>
+    <button class="tab${tab==="score"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'score'})" style="font-size:.62rem;padding:5px 2px">🏆<br><span style="font-size:.55rem">PUNTAJE</span></button>
+    <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})" style="font-size:.62rem;padding:5px 2px">📋<br><span style="font-size:.55rem">PRED.</span></button>
+    <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})" style="font-size:.62rem;padding:5px 2px">🏅<br><span style="font-size:.55rem">LIGAS</span></button>
+    ${hasProbLeague?`<button class="tab${tab==="prob"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'prob'})" style="font-size:.62rem;padding:5px 2px">🎲<br><span style="font-size:.55rem">PROB.</span></button>`:''}
   </div>
   ${tab==="hoy"?hoyTab(pid,pred):""}
   ${tab==="score"?`
@@ -2540,7 +2543,28 @@ function pgMyScore(pid){
     `}
     <button class="btn-pdf" onclick="genPDF('${pid}')">📄 DESCARGAR MI PDF</button>
   `:""}
-  ${tab==="leagues"?lgTabHTML(pid):""}`;
+  ${tab==="leagues"?lgTabHTML(pid):""}
+  ${tab==="prob"&&hasProbLeague?(()=>{
+    // Show first enabled league's simulation
+    const probLg=myLeagues.find(l=>l.showProb);
+    if(!probLg) return "";
+    // Trigger simulation after render
+    setTimeout(()=>runProbSimulation(pid,probLg.id),80);
+    return `<div style="background:linear-gradient(135deg,rgba(20,30,70,.9),rgba(15,25,60,.8));border:1px solid rgba(255,200,0,.22);border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
+      <div style="font-size:.62rem;color:#ffc80077;letter-spacing:1px;margin-bottom:3px">🎲 SIMULACIÓN MONTE CARLO</div>
+      <div style="font-size:.96rem;font-weight:700;color:#ffc800">${probLg.name}</div>
+      <div style="font-size:.65rem;color:#889;margin-top:2px">Modelo Poisson · 5.000 simulaciones · cuotas de apuestas</div>
+    </div>
+    <div style="background:rgba(255,255,255,.04);border-radius:8px;height:4px;margin-bottom:12px;overflow:hidden">
+      <div id="prob-prog-${probLg.id}" style="background:#ffc800;height:100%;width:0%;transition:width .1s;border-radius:8px"></div>
+    </div>
+    <div id="prob-results-${probLg.id}">
+      <div style="text-align:center;padding:1.5rem;color:#556;font-size:.78rem">
+        <div style="font-size:1.5rem;margin-bottom:.5rem">⏳</div>
+        Calculando probabilidades…
+      </div>
+    </div>`;
+  })():""}`;
 }
 
 // ── LEAGUES ──────────────────────────────────────────
@@ -2867,6 +2891,11 @@ function pgAdmin(tab){
             <div style="font-weight:700;font-size:.92rem;color:#ffc800">${lg.name}</div>
             <div style="font-size:.67rem;color:#889;margin-top:.1rem">Código: <span class="league-code">${lg.code}</span> · ${members.length} miembro${members.length!==1?"s":""}</div>
           </div>
+          <button onclick="adminToggleLeagueProb('${lg.id}')"
+            style="background:${lg.showProb?'rgba(0,200,83,.15)':'rgba(255,255,255,.06)'};color:${lg.showProb?'#4de0a0':'#667'};border:1px solid ${lg.showProb?'rgba(0,200,83,.3)':'rgba(255,255,255,.12)'};border-radius:6px;padding:.28rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0"
+            title="${lg.showProb?'Desactivar':'Activar'} tab de Probabilidades para esta liga">
+            🎲 ${lg.showProb?'ON':'OFF'}
+          </button>
           <button onclick="generateLeaguePDF('${lg.id}')"
             style="background:rgba(255,200,0,.12);color:#ffc800;border:1px solid rgba(255,200,0,.3);border-radius:6px;padding:.28rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>
           <button onclick="document.getElementById('${editId}').style.display=document.getElementById('${editId}').style.display==='none'?'block':'none'"
@@ -3573,6 +3602,414 @@ function resetAll(){
 
   showFlash("✓ Caché local borrado. Borra participantes desde Firebase Console si es necesario.");
   go("landing");
+}
+
+// ── MONTE CARLO PROBABILITY SIMULATION ──────────────────
+// Poisson double model calibrated from Betfair/DraftKings/Polymarket (Jun 2026)
+// Each entry: matchId → [lambdaHome, lambdaAway]
+const MATCH_LAMBDAS={
+  1:[2.1,.55],2:[1.4,1.25],3:[1.55,1.1],4:[.65,1.8],5:[2.0,.6],6:[1.5,.8],
+  7:[1.65,1.0],8:[.85,1.75],9:[1.8,.75],10:[1.6,1.1],11:[1.55,1.45],12:[1.1,1.55],
+  13:[2.3,.75],14:[.7,1.75],15:[2.5,.5],16:[1.45,1.3],17:[2.2,.6],18:[1.6,.95],
+  19:[1.7,.95],20:[1.0,1.5],21:[1.85,.7],22:[1.3,1.4],23:[1.9,.8],24:[1.4,1.1],
+  25:[3.5,.35],26:[1.35,1.25],27:[2.8,.5],28:[1.2,1.5],29:[3.0,.45],30:[2.0,.7],
+  31:[2.0,.85],32:[1.5,1.1],33:[2.2,.7],34:[1.45,1.3],35:[2.1,.8],36:[1.4,1.35],
+  37:[2.3,.7],38:[1.45,1.2],39:[2.5,.55],40:[1.7,.85],41:[2.4,.65],42:[1.5,1.2],
+  43:[3.2,.4],44:[1.15,1.55],45:[3.0,.45],46:[1.4,1.45],47:[2.8,.55],48:[1.75,.8],
+  49:[2.9,.45],50:[1.3,1.2],51:[3.1,.4],52:[1.5,1.1],53:[3.0,.5],54:[1.6,1.05],
+  55:[3.0,.4],56:[1.65,1.15],57:[2.7,.55],58:[1.8,.7],59:[2.8,.5],60:[1.7,.9],
+  61:[2.5,.55],62:[1.45,1.35],63:[2.6,.6],64:[1.4,1.4],65:[2.4,.7],66:[1.55,1.2],
+  67:[2.1,.75],68:[1.5,1.3],69:[2.2,.7],70:[1.4,1.35],71:[2.15,.8],72:[1.6,1.1]
+};
+
+// Precompute Poisson PMFs (cached factorials)
+const _FACT=[1]; function _fact(n){while(_FACT.length<=n)_FACT.push(_FACT[_FACT.length-1]*_FACT.length);return _FACT[n]||Infinity;}
+function _poisson(k,l){return Math.exp(-l)*Math.pow(l,k)/_fact(k);}
+
+// Build score probability table for a match
+function _buildDist(lH,lA){
+  const sc={};let pH=0,pD=0,pA=0;
+  for(let h=0;h<=8;h++)for(let a=0;a<=8;a++){
+    const p=_poisson(h,lH)*_poisson(a,lA);
+    sc[h+'-'+a]=p;
+    if(h>a)pH+=p;else if(h===a)pD+=p;else pA+=p;
+  }
+  return {sc,pH,pD,pA};
+}
+const _DISTS={};
+Object.entries(MATCH_LAMBDAS).forEach(([id,[lH,lA]])=>{_DISTS[id]=_buildDist(lH,lA);});
+
+// Sample a single match outcome: returns [h, a]
+function _sampleMatch(id){
+  const d=_DISTS[id]; if(!d) return [1,1];
+  const r=Math.random(); let cum=0;
+  for(let h=0;h<=8;h++)for(let a=0;a<=8;a++){
+    cum+=d.sc[h+'-'+a]||0; if(r<=cum) return [h,a];
+  }
+  return [1,0];
+}
+
+// Calculate points a prediction gets for a given actual result
+function _matchPts(pred,ah,aa){
+  if(!pred||pred.h===""||pred.a==="") return 0;
+  const ph=+pred.h,pa=+pred.a;
+  if(ph===ah&&pa===aa) return 5;
+  const pr=ph>pa?'H':ph<pa?'A':'D', ar=ah>aa?'H':ah<aa?'A':'D';
+  return pr===ar?3:0;
+}
+
+// Run Monte Carlo simulation for a league (async, updates DOM)
+// Team strength ratings for KO simulation (calibrated from Betfair/DraftKings Jun 2026)
+const TEAM_STR={
+  'Brasil':93,'España':92,'Francia':91,'Argentina':91,'Inglaterra':88,
+  'Alemania':87,'Portugal':86,'Países Bajos':85,'Bélgica':83,'Uruguay':82,
+  'Colombia':81,'México':82,'EE.UU.':79,'Canadá':78,'Suiza':77,
+  'Dinamarca':76,'Japón':75,'Corea del Sur':73,'Noruega':73,'Chile':72,
+  'Ecuador':71,'Turquía':71,'Marruecos':70,'Croacia':69,'Australia':68,
+  'Chequia':68,'Senegal':67,'Serbia':67,'Escocia':68,'Irán':66,
+  'Suecia':66,'Nigeria':65,'Albania':65,'Paraguay':65,'Bosnia-Herz.':65,
+  'C. de Marfil':68,'Túnez':63,'Egipto':64,'Arabia Saudita':63,
+  'Islandia':63,'Perú':62,'Venezuela':62,'Panamá':60,'Nueva Zelanda':60,
+  'Sudáfrica':60,'Uzbekistán':58,'Angola':55,'Cabo Verde':58,'Qatar':55,
+  'Haití':52,'Curazao':50
+};
+
+// Simulate a KO match (no draws — extra time/penalties included)
+function _simKOMatch(tH,tA){
+  if(!tH||!tA) return tH||tA||null;
+  const sH=TEAM_STR[tH]||65, sA=TEAM_STR[tA]||65;
+  return Math.random()<sH/(sH+sA)?tH:tA;
+}
+
+// Fixed bracket progression indices (FIFA 2026 official bracket)
+// R16_PAIRS[i] = [r32_idxA, r32_idxB]
+const _R16P=[[1,4],[0,2],[3,5],[6,7],[10,11],[8,9],[13,15],[12,14]];
+const _QFP=[[0,1],[2,3],[4,5],[6,7]];
+const _SFP=[[0,2],[1,3]];
+
+// Simulate full tournament once, returns {simActuals, simKO, r32Teams}
+function _simFullTournament(){
+  // Build simActuals: use confirmed results + sample pending
+  const simA={};
+  MATCHES.forEach(m=>{
+    const a=(STATE.actuals||{})[m.id];
+    if(a&&a.h!==""&&a.a!=="") simA[m.id]=a;
+    else{ const[h,aa]=_sampleMatch(m.id); simA[m.id]={h,a:aa}; }
+  });
+
+  // Get R32 pairings using buildBracket with simulated group results
+  let r32Matches;
+  try{ r32Matches=buildBracket(simA,{}).r32; }catch(e){ return null; }
+  if(!r32Matches||r32Matches.length<16) return null;
+
+  // R32 qualifiers set
+  const r32Teams=new Set(r32Matches.flatMap(m=>[m.h,m.a].filter(Boolean)));
+
+  // Simulate KO rounds using hardcoded bracket
+  const r32w=r32Matches.map(m=>_simKOMatch(m.h,m.a));
+  const r16w=_R16P.map(([a,b])=>_simKOMatch(r32w[a],r32w[b]));
+  const qfw=_QFP.map(([a,b])=>_simKOMatch(r16w[a],r16w[b]));
+  const sfw=_SFP.map(([a,b])=>_simKOMatch(qfw[a],qfw[b]));
+  const sfL=_SFP.map(([a,b],i)=>qfw[a]===sfw[i]?qfw[b]:qfw[a]);
+  const champion=_simKOMatch(sfw[0],sfw[1]);
+  const runnerUp=sfw[0]===champion?sfw[1]:sfw[0];
+  const third=_simKOMatch(sfL[0],sfL[1]);
+  const fourth=sfL[0]===third?sfL[1]:sfL[0];
+
+  return{
+    simA,
+    simKO:{
+      r32:Object.fromEntries(r32w.map((w,i)=>[i,w])),
+      r16:Object.fromEntries(r16w.map((w,i)=>[i,w])),
+      qf: Object.fromEntries(qfw.map((w,i)=>[i,w])),
+      sf: {0:sfw[0],1:sfw[1]},
+      final:{0:champion,1:runnerUp},
+      f3: {0:third,1:fourth}
+    },
+    r32Teams
+  };
+}
+
+// Score a participant against one simulated tournament
+function _scoreOneSim(pid,sim,currentPts,playedIds,predR32Teams,pred4th){
+  const pred=STATE.predictions[pid]||{};
+  const ko=pred.ko||{};
+  let pts=currentPts;
+
+  // Pending group match pts
+  MATCHES.forEach(m=>{
+    if(playedIds.has(+m.id)) return;
+    const a=sim.simA[m.id];
+    if(a) pts+=_matchPts((pred.groups||{})[m.id],a.h,a.a);
+  });
+
+  // Group advancement: +8 per correctly predicted R32 qualifier
+  predR32Teams.forEach(t=>{ if(t&&sim.r32Teams.has(t)) pts+=8; });
+
+  // KO rounds
+  [[sim.simKO.r32,ko.r32,10],[sim.simKO.r16,ko.r16,15],[sim.simKO.qf,ko.qf,20]]
+    .forEach(([actual,pick,p])=>{
+      if(!actual||!pick) return;
+      Object.keys(actual).forEach(i=>{ if(actual[i]&&pick[String(i)]===actual[i]) pts+=p; });
+    });
+
+  // Clasificado a Final: +30 per correct finalist (via SF picks)
+  const fins=[sim.simKO.final[0],sim.simKO.final[1]].filter(Boolean);
+  const sfP=ko.sf||{};
+  if(sfP[0]&&fins.includes(sfP[0])) pts+=30;
+  if(sfP[1]&&fins.includes(sfP[1])) pts+=30;
+
+  // Champion/Runner-up/3rd/4th
+  if(sim.simKO.final[0]&&(ko.final||{})[0]===sim.simKO.final[0]) pts+=40;
+  if(sim.simKO.final[1]&&(ko.final||{})[1]===sim.simKO.final[1]) pts+=30;
+  if(sim.simKO.f3[0]&&(ko.f3||{})[0]===sim.simKO.f3[0]) pts+=20;
+  if(pred4th&&sim.simKO.f3[1]===pred4th) pts+=10;
+
+  return pts;
+}
+
+function runProbSimulation(pid,lgId){
+  const N=5000, CHUNK=150;
+  const lg=STATE.leagues.find(l=>l.id===lgId);
+  const container=document.getElementById('prob-results-'+lgId);
+  if(!container||!lg) return;
+
+  const members=lg.memberIds
+    .map(mid=>STATE.participants.find(x=>x.id===mid))
+    .filter(p=>p&&!p.hidden);
+  if(members.length<2){
+    container.innerHTML=`<div style="text-align:center;padding:1.5rem;color:#667;font-size:.78rem">Se necesitan al menos 2 participantes.</div>`;
+    return;
+  }
+
+  // Pre-compute per-participant data (done once, not inside simulation loop)
+  const playedIds=new Set(MATCHES.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).map(m=>+m.id));
+
+  const memberData=members.map(p=>{
+    const pred=STATE.predictions[p.id]||{};
+    const ko=pred.ko||{};
+
+    // Current confirmed score
+    const currentPts=scoreFull(p.id);
+
+    // Pre-compute predicted R32 teams from their group predictions
+    let predR32Teams=new Set();
+    try{
+      const B=buildBracket(pred.groups||{},ko);
+      if(B&&B.r32) B.r32.forEach(m=>{if(m.h)predR32Teams.add(m.h);if(m.a)predR32Teams.add(m.a);});
+    }catch(e){}
+
+    // Pre-compute predicted 4th place
+    let pred4th=null;
+    try{
+      const B=buildBracket(pred.groups||{},ko);
+      if(B&&B.f3&&(ko.f3||{})[0]){pred4th=B.f3.h===(ko.f3||{})[0]?B.f3.a:B.f3.h;}
+    }catch(e){}
+
+    return{...p,currentPts,predR32Teams,pred4th};
+  });
+
+  const rankCounts=members.map(()=>new Array(members.length).fill(0));
+  let simsDone=0;
+
+  function chunk(){
+    const end=Math.min(simsDone+CHUNK,N);
+    for(let s=simsDone;s<end;s++){
+      const sim=_simFullTournament();
+      if(!sim) continue;
+      const scores=memberData.map(md=>
+        _scoreOneSim(md.id,sim,md.currentPts,playedIds,md.predR32Teams,md.pred4th)
+        +Math.random()*1e-5
+      );
+      const order=scores.map((sc,i)=>({sc,i})).sort((a,b)=>b.sc-a.sc);
+      order.forEach(({i},rank)=>rankCounts[i][rank]++);
+    }
+    simsDone=end;
+    const prog=document.getElementById('prob-prog-'+lgId);
+    if(prog) prog.style.width=(simsDone/N*100)+'%';
+    if(simsDone<N) setTimeout(chunk,0);
+    else renderProbResults(members,rankCounts,N,pid,lgId);
+  }
+  setTimeout(chunk,0);
+}
+
+function renderProbResults(members,rankCounts,N,myPid,lgId){
+  const container=document.getElementById('prob-results-'+lgId);
+  if(!container) return;
+
+  const medals=['🥇','🥈','🥉','4°','5°','6°','7°','8°'];
+  const results=members.map((p,i)=>{
+    const c=rankCounts[i];
+    const pct=c.map(x=>Math.round(x/N*1000)/10);
+    return {...p,p1:pct[0],p2:pct[1],p3:pct[2],
+      pPodio:Math.round((c[0]+c[1]+c[2])/N*1000)/10};
+  }).sort((a,b)=>b.p1-a.p1);
+
+  let html=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:.6rem;color:#889">
+    <span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:2px;background:#ffc800;display:inline-block"></span>1er</span>
+    <span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:2px;background:#b0b0b0;display:inline-block"></span>2do</span>
+    <span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:2px;background:#cd7f32;display:inline-block"></span>3er</span>
+    <span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(255,255,255,.1);display:inline-block"></span>Fuera</span>
+  </div>`;
+
+  results.forEach((p,i)=>{
+    const isMe=p.id===myPid;
+    const w1=p.p1,w2=p.p2,w3=p.p3,wOut=Math.max(0,100-w1-w2-w3);
+    const qn=STATE.predictions[p.id]?.quinName||'';
+    html+=`<div style="margin-bottom:8px;background:${isMe?'rgba(255,200,0,.04)':'rgba(255,255,255,.03)'};border:1px solid ${isMe?'rgba(255,200,0,.28)':'rgba(255,255,255,.07)'};border-radius:10px;padding:9px 11px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <span style="font-size:${i<3?'.95':'.78'}rem;min-width:20px;text-align:center">${medals[i]||'#'+(i+1)}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:${isMe?'.86':'.80'}rem;font-weight:${isMe?700:500};color:${isMe?'#ffc800':'#eee'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${p.name}${isMe?' <span style="font-size:.58rem;color:#ffc80044">← tú</span>':''}
+          </div>
+          ${qn&&qn!==p.name?`<div style="font-size:.6rem;color:#445;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${qn}"</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:.7rem;font-weight:700;color:${isMe?'#ffc800':'#889'}">${scoreFull(p.id)} pts</div>
+        </div>
+      </div>
+      <div style="display:flex;border-radius:5px;overflow:hidden;height:18px;gap:1px;margin-bottom:4px">
+        ${w1>0?`<div style="background:#ffc800;width:${w1}%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#000;overflow:hidden">${w1>=6?w1+'%':''}</div>`:''}
+        ${w2>0?`<div style="background:#b0b0b0;width:${w2}%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;overflow:hidden">${w2>=6?w2+'%':''}</div>`:''}
+        ${w3>0?`<div style="background:#cd7f32;width:${w3}%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;overflow:hidden">${w3>=6?w3+'%':''}</div>`:''}
+        ${wOut>0?`<div style="background:rgba(255,255,255,.1);width:${wOut}%;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#445;overflow:hidden">${wOut>=10?wOut+'%':''}</div>`:''}
+      </div>
+      <div style="display:flex;gap:8px;font-size:.62rem;flex-wrap:wrap">
+        <span style="color:#ffc800">🥇 ${p.p1}%</span>
+        <span style="color:#b0b0b0">🥈 ${p.p2}%</span>
+        <span style="color:#cd7f32">🥉 ${p.p3}%</span>
+        <span style="margin-left:auto;color:${p.pPodio>=50?'#4de0a0':'#889'}">Podio: <strong>${p.pPodio}%</strong></span>
+      </div>
+    </div>`;
+  });
+
+  const me=results.find(r=>r.id===myPid);
+  if(me){
+    // Compute pending breakdown
+    const pendingGroups=MATCHES.filter(m=>{const a=(STATE.actuals||{})[m.id];return!a||a.h===""||a.a===""});
+    const pendingKO=(()=>{
+      const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+      const rounds=['r32','r16','qf','sf'];
+      let pending=[];
+      rounds.forEach(r=>{const expected={r32:16,r16:8,qf:4,sf:2}[r];const done=Object.keys(aKO[r]||{}).length;if(done<expected)pending.push({r,done,expected,label:{r32:'16vos',r16:'Octavos',qf:'Cuartos',sf:'Semis'}[r]});});
+      const hasFinal=aKO.final&&aKO.final[0];
+      const hasF3=aKO.f3&&aKO.f3[0];
+      if(!hasFinal) pending.push({r:'final',done:0,expected:1,label:'Final'});
+      if(!hasF3) pending.push({r:'f3',done:0,expected:1,label:'3er Lugar'});
+      return pending;
+    })();
+
+    // KO context: show which teams are still alive
+    const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+    const finalTeams=aKO.final?[aKO.final[0],aKO.final[1]].filter(Boolean):[];
+    const sfTeams=aKO.sf?[aKO.sf[0],aKO.sf[1]].filter(Boolean):[];
+    const qfTeams=aKO.qf?Object.values(aKO.qf).filter(Boolean):[];
+
+    html+=`
+    <!-- Mis probabilidades -->
+    <div style="background:rgba(255,200,0,.05);border:1px solid rgba(255,200,0,.15);border-radius:10px;padding:11px 13px;margin-top:4px">
+      <div style="font-size:.6rem;letter-spacing:1.5px;color:#ffc800;font-weight:700;margin-bottom:7px">TUS PROBABILIDADES EN ESTA LIGA</div>
+      <div style="display:flex;gap:0;margin-bottom:0">
+        <div style="flex:1;text-align:center;padding:.4rem 0;border-right:1px solid rgba(255,255,255,.08)">
+          <div style="font-size:1.6rem;font-weight:800;color:#ffc800;line-height:1">${me.p1}%</div>
+          <div style="font-size:.62rem;color:#889;margin-top:2px">🏆 Ganar</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:.4rem 0;border-right:1px solid rgba(255,255,255,.08)">
+          <div style="font-size:1.6rem;font-weight:800;color:${me.pPodio>=50?'#4de0a0':me.pPodio>=30?'#ffc800':'#889'};line-height:1">${me.pPodio}%</div>
+          <div style="font-size:.62rem;color:#889;margin-top:2px">🏅 Podio</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:.4rem 0">
+          <div style="font-size:1.6rem;font-weight:800;color:#445;line-height:1">${100-me.pPodio}%</div>
+          <div style="font-size:.62rem;color:#556;margin-top:2px">❌ Fuera</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Partidos pendientes -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-top:6px">
+      <div style="font-size:.6rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:7px">📊 LO QUE FALTA SIMULAR</div>
+
+      ${pendingGroups.length>0?`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+        <div>
+          <div style="font-size:.75rem;color:#eee">⚽ Fase de grupos</div>
+          <div style="font-size:.62rem;color:#556">${pendingGroups.length} partidos por jugarse</div>
+        </div>
+        <span style="font-size:.7rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:2px 7px;font-weight:700">${pendingGroups.length} pendientes</span>
+      </div>`:''}
+
+      ${pendingKO.map(r=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+        <div>
+          <div style="font-size:.75rem;color:#eee">🏟️ ${r.label}</div>
+          <div style="font-size:.62rem;color:#556">${r.done} de ${r.expected} definido${r.done!==1?'s':''}</div>
+        </div>
+        <span style="font-size:.7rem;background:rgba(136,170,255,.08);color:#88aaff;border-radius:4px;padding:2px 7px;font-weight:700">${r.expected-r.done} pendiente${r.expected-r.done!==1?'s':''}</span>
+      </div>`).join('')}
+
+      ${pendingGroups.length===0&&pendingKO.length===0?`
+      <div style="text-align:center;font-size:.75rem;color:#4de0a0;padding:.3rem 0">✅ Torneo completado — resultados finales</div>`:''}
+
+      ${finalTeams.length>0?`<div style="margin-top:6px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
+        <div style="font-size:.62rem;color:#667;margin-bottom:3px">FINALISTAS CONFIRMADOS</div>
+        <div style="font-size:.78rem;color:#ffc800">${finalTeams.map(t=>f(t)+' '+t).join(' vs ')}</div>
+      </div>`:''}
+      ${sfTeams.length>0&&finalTeams.length===0?`<div style="margin-top:6px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
+        <div style="font-size:.62rem;color:#667;margin-bottom:3px">SEMIFINALISTAS CONFIRMADOS</div>
+        <div style="font-size:.75rem;color:#eee">${sfTeams.map(t=>f(t)+' '+t).join(' · ')}</div>
+      </div>`:''}
+      ${qfTeams.length>0&&sfTeams.length===0?`<div style="margin-top:6px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
+        <div style="font-size:.62rem;color:#667;margin-bottom:3px">CUARTOFINALISTAS CONFIRMADOS</div>
+        <div style="font-size:.73rem;color:#eee">${qfTeams.map(t=>f(t)+' '+t).join(' · ')}</div>
+      </div>`:''}
+    </div>
+
+    <!-- Metodología -->
+    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:11px 13px;margin-top:6px">
+      <div style="font-size:.6rem;letter-spacing:1.5px;color:#667;font-weight:700;margin-bottom:7px">🎲 CÓMO SE CALCULAN</div>
+      <div style="font-size:.7rem;color:#889;line-height:1.7">
+        Se corren <strong style="color:#eee">5.000 simulaciones</strong> completas del torneo restante. En cada una:
+      </div>
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;gap:7px;align-items:flex-start">
+          <span style="color:#ffc800;flex-shrink:0;font-size:.75rem">①</span>
+          <span style="font-size:.7rem;color:#889;line-height:1.5">Los partidos de <strong style="color:#eee">grupos pendientes</strong> se simulan con distribución de Poisson calibrada con cuotas de Betfair y DraftKings (probabilidades reales de cada marcador)</span>
+        </div>
+        <div style="display:flex;gap:7px;align-items:flex-start">
+          <span style="color:#ffc800;flex-shrink:0;font-size:.75rem">②</span>
+          <span style="font-size:.7rem;color:#889;line-height:1.5">Los <strong style="color:#eee">32 clasificados</strong> se determinan del resultado de grupos, y se asignan al bracket oficial FIFA</span>
+        </div>
+        <div style="display:flex;gap:7px;align-items:flex-start">
+          <span style="color:#ffc800;flex-shrink:0;font-size:.75rem">③</span>
+          <span style="font-size:.7rem;color:#889;line-height:1.5">Los partidos de <strong style="color:#eee">fase eliminatoria</strong> (16vos → Final) se simulan por fuerza relativa de los equipos según ratings de mercado</span>
+        </div>
+        <div style="display:flex;gap:7px;align-items:flex-start">
+          <span style="color:#ffc800;flex-shrink:0;font-size:.75rem">④</span>
+          <span style="font-size:.7rem;color:#889;line-height:1.5">Se calculan los <strong style="color:#eee">puntos de cada participante</strong> comparando sus picks con ese resultado simulado — grupos, clasificados, KO y podio completo</span>
+        </div>
+        <div style="display:flex;gap:7px;align-items:flex-start">
+          <span style="color:#ffc800;flex-shrink:0;font-size:.75rem">⑤</span>
+          <span style="font-size:.7rem;color:#889;line-height:1.5">El <strong style="color:#eee">% de cada posición</strong> es cuántas de las 5.000 simulaciones terminó en ese lugar. Se actualiza cada vez que abres este tab.</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.05);font-size:.62rem;color:#445;display:flex;justify-content:space-between">
+        <span>Modelo Poisson doble · ratings de mercado Jun 2026</span>
+        <span>Actualizado ${new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+    </div>`;
+  }
+  container.innerHTML=html;
+}
+
+// Admin toggle showProb for a league
+function adminToggleLeagueProb(lid){
+  const lg=STATE.leagues.find(l=>l.id===lid);
+  if(!lg) return;
+  lg.showProb=!lg.showProb;
+  fbWriteLeague(lid);
+  go('admin',{tab:'leagues'});
+  showFlash(lg.showProb?'✅ Probabilidades habilitadas para '+lg.name:'🔒 Probabilidades desactivadas');
 }
 
 // ── PDF GENERATION (2 pages, landscape A4) ─────────────
