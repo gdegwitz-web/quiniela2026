@@ -2473,13 +2473,27 @@ function pgMyScore(pid){
 
       // Podio (Final + 3rd)
       const actualFinalistList=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
+      // Podio — derive runner-up and 4th place from bracket if not explicitly stored
+      const pSF=ko.sf||{};
+      const sf0=pSF[0]||null, sf1=pSF[1]||null;
+      const champ=( ko.final||{})[0]||null;
+      // Runner-up = the finalist who is NOT the champion
+      const runnerUp=(ko.final||{})[1]||
+        (champ&&sf0&&sf1 ? (champ===sf0?sf1:champ===sf1?sf0:null) : null);
+      // 3rd place pick
+      const third=(ko.f3||{})[0]||null;
+      // 4th place = loser of f3 match (the other SF loser who is NOT 3rd place)
+      let fourth=null;
+      try{
+        const B4=buildBracket(pred.groups||{},ko);
+        if(B4&&B4.f3&&third){fourth=B4.f3.h===third?B4.f3.a:B4.f3.h;}
+      }catch(e){}
+
       const podioItems=[
-        {key:"final", idx:0, label:"🏆 Campeón",    pts:40, col:"#ffc800",
-         pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
-        {key:"final", idx:1, label:"🥈 Subcampeón",  pts:30, col:"#aaa",
-         pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
-        {key:"f3",   idx:0, label:"🥉 3er Lugar",   pts:20, col:"#cd7f32",
-         pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
+        {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:champ,    aTeam:(aKO.final||[])[0]||null},
+        {label:"🥈 Subcampeón", pts:30, col:"#aaa",   pTeam:runnerUp, aTeam:(aKO.final||[])[1]||null},
+        {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:third,   aTeam:(aKO.f3||[])[0]||null},
+        {label:"4to Lugar",     pts:10, col:"#888",    pTeam:fourth,  aTeam:(aKO.f3||[])[1]||null},
       ].filter(x=>x.pTeam);
 
       if(podioItems.length){
@@ -3185,10 +3199,22 @@ function pgLeaderboard(tab){
           </div>`;
         });
         // Podio
+        // Auto-derive runner-up and 4th place
+        const pSF2=ko.sf||{};
+        const champ2=(ko.final||{})[0]||null;
+        const runnerUp2=(ko.final||{})[1]||
+          (champ2&&pSF2[0]&&pSF2[1]?(champ2===pSF2[0]?pSF2[1]:champ2===pSF2[1]?pSF2[0]:null):null);
+        const third2=(ko.f3||{})[0]||null;
+        let fourth2=null;
+        try{
+          const Bb=buildBracket(pred.groups||{},ko);
+          if(Bb&&Bb.f3&&third2){fourth2=Bb.f3.h===third2?Bb.f3.a:Bb.f3.h;}
+        }catch(e){}
         const podioItems=[
-          {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
-          {label:"🥈 Subcampeón", pts:30, col:"#aaa",    pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
-          {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
+          {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:champ2,    aTeam:(aKO.final||[])[0]||null},
+          {label:"🥈 Subcampeón", pts:30, col:"#aaa",   pTeam:runnerUp2, aTeam:(aKO.final||[])[1]||null},
+          {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:third2,   aTeam:(aKO.f3||[])[0]||null},
+          {label:"4to Lugar",     pts:10, col:"#888",    pTeam:fourth2,  aTeam:(aKO.f3||[])[1]||null},
         ].filter(x=>x.pTeam);
         if(podioItems.length){
           html+=`<div style="margin-bottom:.6rem"><div style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px;margin:.4rem 0 .3rem">PODIO</div>`;
