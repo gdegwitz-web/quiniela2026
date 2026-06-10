@@ -2524,7 +2524,19 @@ function pgMyScore(pid){
         </div>
         <div class="tn r">${trunc(m.a,10)} ${f(m.a)}</div>
       </div>`;}).join("")}
-    ${stTable(calcStandings(grp,STATE.actuals||{}))}
+    ${(()=>{
+      // Show actual standings if admin has entered results for this group,
+      // otherwise show predicted standings based on user's own picks
+      const grpMatches=MATCHES.filter(m=>m.g===grp);
+      const hasActuals=grpMatches.some(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";});
+      if(hasActuals){
+        return `<div style="font-size:.58rem;color:#4de0a0;text-align:right;margin-bottom:2px">Clasificación real ↓</div>`
+          + stTable(calcStandings(grp,STATE.actuals||{}));
+      } else {
+        return `<div style="font-size:.58rem;color:#ffc80088;text-align:right;margin-bottom:2px">Según tus predicciones ↓</div>`
+          + stTable(calcStandings(grp,pred.groups||{}));
+      }
+    })()}
     `}
     <button class="btn-pdf" onclick="genPDF('${pid}')">📄 DESCARGAR MI PDF</button>
   `:""}
