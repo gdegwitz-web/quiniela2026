@@ -2474,10 +2474,6 @@ function pgMyScore(pid){
       // Podio (Final + 3rd)
       const actualFinalistList=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
       const podioItems=[
-        {key:"finalist0", label:"⬛ Finalista",     pts:30, col:"#88aaff",
-         pTeam:(ko.final||{})[0]||null, aTeam:actualFinalistList.length?((ko.final||{})[0]&&actualFinalistList.includes((ko.final||{})[0])?(ko.final||{})[0]:null):null},
-        {key:"finalist1", label:"⬛ Finalista",     pts:30, col:"#88aaff",
-         pTeam:(ko.final||{})[1]||null, aTeam:actualFinalistList.length?((ko.final||{})[1]&&actualFinalistList.includes((ko.final||{})[1])?(ko.final||{})[1]:null):null},
         {key:"final", idx:0, label:"🏆 Campeón",    pts:40, col:"#ffc800",
          pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
         {key:"final", idx:1, label:"🥈 Subcampeón",  pts:30, col:"#aaa",
@@ -2808,40 +2804,9 @@ function pgAdmin(tab){
           <button onclick="toggleHide('${p.id}')" style="background:rgba(100,150,255,.1);color:#7aafff;border:1px solid rgba(100,150,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">${p.hidden?"👁️":"🙈"}</button>
           <button onclick="deletePart('${p.id}')" style="background:rgba(255,60,60,.1);color:#ff7070;border:1px solid rgba(255,60,60,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🗑️</button>
         </div>
-        <!-- League + Bracket panel (toggle) -->
+        <!-- League panel (toggle) -->
         <div id="${expandId}" class="lg-admin-panel">
           <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid rgba(255,255,255,.08)">
-
-            <!-- Points breakdown audit -->
-            ${(()=>{
-              const pred2=STATE.predictions[p.id]||{};
-              const gPts=scoreGroups(pred2.groups||{},STATE.actuals);
-              const kPts=scoreKO(pred2);
-              const total=gPts+kPts;
-              const rows=scoreKODetail(pred2);
-              const hasKOData=rows.length>0;
-              return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:.55rem .7rem;margin-bottom:.6rem">
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:${hasKOData?".45rem":"0"}">
-                  <span style="font-size:.8rem;font-weight:700;color:#ffc800">Total: ${total} pts</span>
-                  <span style="font-size:.7rem;color:#889">Grupos: +${gPts}</span>
-                  <span style="font-size:.7rem;color:#88aaff">KO: +${kPts}</span>
-                </div>
-                ${hasKOData?`<table style="width:100%;border-collapse:collapse;font-size:.68rem">
-                  <tr style="color:#667;border-bottom:1px solid rgba(255,255,255,.08)">
-                    <td style="padding:.18rem .3rem">Ronda</td>
-                    <td style="padding:.18rem .3rem">Real</td>
-                    <td style="padding:.18rem .3rem">Predicción</td>
-                    <td style="padding:.18rem .3rem;text-align:right">Pts</td>
-                  </tr>
-                  ${rows.map(r=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
-                    <td style="padding:.18rem .3rem;color:#889">${r.round}</td>
-                    <td style="padding:.18rem .3rem;color:#eee">${f(r.aTeam)} ${r.aTeam}</td>
-                    <td style="padding:.18rem .3rem;color:${r.ok?"#4de0a0":"#ff8080"}">${r.ok?"✓":r.pTeam!=="—"?"✗":"-"} ${r.pTeam}</td>
-                    <td style="padding:.18rem .3rem;text-align:right;font-weight:700;color:${r.ok?"#4de0a0":"#556"}">+${r.pts}</td>
-                  </tr>`).join("")}
-                </table>`:`<div style="font-size:.68rem;color:#556;font-style:italic">Sin resultados KO cargados aún</div>`}
-              </div>`;
-            })()}
 
             <!-- Leagues -->
             <div style="font-size:.68rem;letter-spacing:1.5px;color:#ffc800;font-weight:700;margin:.6rem 0 .35rem">🏅 LIGAS DE ${p.name.toUpperCase()}</div>
@@ -3220,10 +3185,7 @@ function pgLeaderboard(tab){
           </div>`;
         });
         // Podio
-        const aFinalistList2=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
         const podioItems=[
-          {label:"⬛ Finalista",  pts:30, col:"#88aaff", pTeam:(ko.final||{})[0]||null, aTeam:aFinalistList2.includes((ko.final||{})[0])?(ko.final||{})[0]:null},
-          {label:"⬛ Finalista",  pts:30, col:"#88aaff", pTeam:(ko.final||{})[1]||null, aTeam:aFinalistList2.includes((ko.final||{})[1])?(ko.final||{})[1]:null},
           {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:(ko.final||{})[0]||null, aTeam:(aKO.final||[])[0]||null},
           {label:"🥈 Subcampeón", pts:30, col:"#aaa",    pTeam:(ko.final||{})[1]||null, aTeam:(aKO.final||[])[1]||null},
           {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:(ko.f3||{})[0]||null,   aTeam:(aKO.f3||[])[0]||null},
