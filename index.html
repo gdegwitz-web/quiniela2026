@@ -2881,6 +2881,8 @@ function pgAdmin(tab){
             <div style="font-weight:700;font-size:.92rem;color:#ffc800">${lg.name}</div>
             <div style="font-size:.67rem;color:#889;margin-top:.1rem">Código: <span class="league-code">${lg.code}</span> · ${members.length} miembro${members.length!==1?"s":""}</div>
           </div>
+          <button onclick="generateLeaguePDF('${lg.id}')"
+            style="background:rgba(255,200,0,.12);color:#ffc800;border:1px solid rgba(255,200,0,.3);border-radius:6px;padding:.28rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>
           <button onclick="document.getElementById('${editId}').style.display=document.getElementById('${editId}').style.display==='none'?'block':'none'"
             style="background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.25);border-radius:6px;padding:.28rem .55rem;font-size:.7rem;cursor:pointer;flex-shrink:0">✏️ Editar</button>
           <button onclick="adminDeleteLeague('${lg.id}')"
@@ -3591,22 +3593,26 @@ function resetAll(){
 function buildPDFDoc(pid){
   if(!window.jspdf?.jsPDF) return null;
   const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+  buildParticipantPages(doc, pid, true);
+  return doc;
+}
+
+// Adds participant's 2 pages into an existing jsPDF doc
+function buildParticipantPages(doc, pid, isFirstPage){
   const p=STATE.participants.find(x=>x.id===pid);
-  if(!p) return null;
+  if(!p) return;
   const pred=STATE.predictions[pid]||{};
   if(!pred.groups) pred.groups={};
   if(!pred.ko) pred.ko={};
-  const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
   const W=297,H=210,M=8;
 
-  // Submission date/time string
   const submittedAt=pred.submittedAt?new Date(pred.submittedAt):null;
   const submitStr=submittedAt
     ? "Enviada: "+submittedAt.toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
       +" "+submittedAt.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})
     : "Borrador — "+new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"});
 
-  // ── Color helpers ──
   const bg=(r,g,b)=>doc.setFillColor(r,g,b);
   const col=(r,g,b)=>doc.setTextColor(r,g,b);
   const font=(style,size)=>{doc.setFont("helvetica",style);doc.setFontSize(size)};
@@ -3614,27 +3620,18 @@ function buildPDFDoc(pid){
     doc.setDrawColor(r,g,b);doc.setLineWidth(w);doc.line(x1,y1,x2,y2);
   };
 
-  // ────────────────────────────────────────────────────
-  // PAGE 1 — GROUPS
-  // ────────────────────────────────────────────────────
-  // White background for maximum readability
+  // ── PAGE 1 — GROUPS ──
+  if(!isFirstPage) doc.addPage();
   bg(255,255,255);doc.rect(0,0,W,H,"F");
-
-  // Header bar
   bg(10,20,50);doc.rect(0,0,W,11,"F");
   col(255,200,0);font("bold",9);
   doc.text("QUINIELA FIFA WORLD CUP 2026",M,7.5);
   col(255,255,255);font("normal",7);
   doc.text(p.name.toUpperCase(),W-M,7.5,{align:"right"});
-
-  // Sub-header line
   bg(255,200,0);doc.rect(0,11,W,1.5,"F");
 
   const GKEYS=Object.keys(GROUPS);
-  const cols4=4;
-  const gColW=(W-M*2-6)/cols4;   // 4 columns with small gap
-  const gStartY=15;
-  const mH=5;
+  const cols4=4, gColW=(W-M*2-6)/cols4, gStartY=15, mH=5;
 
   GKEYS.forEach((gk,gi)=>{
     const col4=gi%cols4, row3=Math.floor(gi/cols4);
@@ -3645,26 +3642,19 @@ function buildPDFDoc(pid){
     const blockH=6+gm.length*mH+1+(stRows+1)*4.2;
     const gy=gStartY+row3*(blockH+3);
 
-    // Group title
     bg(10,20,50);doc.rect(gx,gy,gColW,6.5,"F");
     bg(255,200,0);doc.rect(gx,gy,2.5,6.5,"F");
     col(255,255,255);font("bold",6.5);
     doc.text("GRUPO "+gk,gx+4,gy+4.4);
 
-    // Matches
     gm.forEach((m,mi)=>{
       const my=gy+6.5+mi*mH;
-      // Alternate row bg
       bg(mi%2===0?248:240, mi%2===0?249:242, mi%2===0?252:248);
       doc.rect(gx,my,gColW,mH,"F");
       ln(gx,my,gx+gColW,my,200,200,200,.2);
-
-      // Team names
       col(20,30,60);font("normal",4.5);
       doc.text(trunc(m.h,10),gx+1.2,my+3.4,{maxWidth:gColW*0.37});
       doc.text(trunc(m.a,10),gx+gColW-1.2,my+3.4,{align:"right",maxWidth:gColW*0.37});
-
-      // Score or date
       const sc=pred.groups?.[m.id];
       if(sc&&sc.h!==""&&sc.a!==""){
         bg(10,20,50);doc.roundedRect(gx+gColW/2-6,my+.6,12,mH-1.2,1.5,1.5,"F");
@@ -3676,7 +3666,6 @@ function buildPDFDoc(pid){
       }
     });
 
-    // Standings mini table
     const stY=gy+6.5+gm.length*mH+1;
     bg(230,235,245);doc.rect(gx,stY,gColW,4,"F");
     col(60,80,130);font("bold",3.5);
@@ -3685,7 +3674,6 @@ function buildPDFDoc(pid){
     doc.text("PJ",gx+gColW-10,stY+2.8,{align:"center"});
     doc.text("PTS",gx+gColW-5.5,stY+2.8,{align:"center"});
     doc.text("DG",gx+gColW-1,stY+2.8,{align:"right"});
-
     st.forEach((r,ri)=>{
       const ry=stY+4+ri*4.2;
       bg(ri<2?232:248, ri<2?248:248, ri<2?238:248);
@@ -3706,18 +3694,13 @@ function buildPDFDoc(pid){
     });
   });
 
-  // Footer p1
   bg(10,20,50);doc.rect(0,H-5,W,5,"F");
   col(180,190,210);font("normal",4);
-  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  ${submitStr}  |  Pág. 1 de 2`,W/2,H-1.8,{align:"center"});
+  doc.text(p.name+"  |  Quiniela FIFA World Cup 2026  |  "+submitStr,W/2,H-1.8,{align:"center"});
 
-  // ────────────────────────────────────────────────────
-  // PAGE 2 — BRACKET
-  // ────────────────────────────────────────────────────
+  // ── PAGE 2 — BRACKET ──
   doc.addPage();
   bg(255,255,255);doc.rect(0,0,W,H,"F");
-
-  // Header
   bg(10,20,50);doc.rect(0,0,W,11,"F");
   col(255,200,0);font("bold",9);
   doc.text("FASE ELIMINATORIA — BRACKET",M,7.5);
@@ -3726,69 +3709,38 @@ function buildPDFDoc(pid){
   bg(255,200,0);doc.rect(0,11,W,1.5,"F");
 
   const B=buildBracket(pred.groups||{},pred.ko||{});
-  const bTop=15, bBot=H-8, bH=bBot-bTop;
-  const ncols=9;
-  const bCW=(W-M*2)/ncols;
+  const bTop=15, bBot=H-8, bH2=bBot-bTop;
+  const ncols=9, bCW=(W-M*2)/ncols;
   const TH2=7.5, TW2=bCW-2.5, mH2=TH2*2+2.5;
 
   function colX(c){return M+c*bCW+1;}
-  function mY(idx,total){return bTop+(bH/total)*(idx+0.5)-mH2/2;}
+  function mY(idx,total){return bTop+(bH2/total)*(idx+0.5)-mH2/2;}
 
-  // Draw one match cell — high contrast
   function drawBM(rid,mid,bx,by,th,ta,winner){
     const hw=winner===th&&th, aw=winner===ta&&ta;
     const hasH=!!th, hasA=!!ta;
-
-    // Home row
     if(hw){bg(0,140,60);}else if(hasH){bg(240,245,255);}else{bg(245,245,245);}
     doc.rect(bx,by,TW2,TH2,"F");
     col(hw?255:hasH?10:140, hw?255:hasH?25:145, hw?255:hasH?70:165);
     font(hw?"bold":"normal",4.5);
     doc.text(trunc(th||"TBD",10),bx+1.2,by+TH2/2+1.6,{maxWidth:TW2-1.5});
-    if(hw){
-      col(255,255,255);font("bold",5.5);
-      doc.text("✓",bx+TW2-2.5,by+TH2/2+1.6,{align:"right"});
-    }
-
-    // Divider
+    if(hw){col(255,255,255);font("bold",5.5);doc.text("✓",bx+TW2-2.5,by+TH2/2+1.6,{align:"right"});}
     ln(bx,by+TH2,bx+TW2,by+TH2,190,200,220,.3);
-
-    // Away row
     if(aw){bg(0,140,60);}else if(hasA){bg(250,252,255);}else{bg(245,245,245);}
     doc.rect(bx,by+TH2+.5,TW2,TH2,"F");
     col(aw?255:hasA?10:140, aw?255:hasA?25:145, aw?255:hasA?70:165);
     font(aw?"bold":"normal",4.5);
     doc.text(trunc(ta||"TBD",10),bx+1.2,by+TH2+.5+TH2/2+1.6,{maxWidth:TW2-1.5});
-    if(aw){
-      col(255,255,255);font("bold",5.5);
-      doc.text("✓",bx+TW2-2.5,by+TH2+.5+TH2/2+1.6,{align:"right"});
-    }
-
-    // Border — gold if has winner, grey otherwise
+    if(aw){col(255,255,255);font("bold",5.5);doc.text("✓",bx+TW2-2.5,by+TH2+.5+TH2/2+1.6,{align:"right"});}
     const brd=winner?[255,180,0]:[180,190,210];
-    doc.setDrawColor(...brd);
-    doc.setLineWidth(winner?.5:.2);
-    doc.rect(bx,by,TW2,mH2);
+    doc.setDrawColor(...brd);doc.setLineWidth(winner?.5:.2);doc.rect(bx,by,TW2,mH2);
   }
 
-  // Connector line from right edge of match to left edge of next
-  function drawConn(x1,y1,x2,y2){
-    const mx=(x1+x2)/2;
-    doc.setDrawColor(140,160,200);doc.setLineWidth(.3);
-    doc.lines([[mx-x1,0],[0,y2-y1],[x2-mx,0]],x1,y1);
-  }
+  const lbls2={r32:"16VOS",r16:"OCTAVOS",qf:"CUARTOS",sf:"SEMIS"};
+  function roundLabel(txt,x,y){col(10,20,50);font("bold",4.5);doc.text(txt,x,y,{align:"center"});}
 
-  // Round labels
-  const lbls={r32:"R32",r16:"OCTAVOS",qf:"CUARTOS",sf:"SEMIS"};
-  function roundLabel(txt,x,y){
-    col(10,20,50);font("bold",4.5);
-    doc.text(txt,x,y,{align:"center"});
-  }
-
-  // Left visual order
   const leftR32order=[1,4,0,2,3,5,6,7];
   const rightR32order=[10,11,8,9,13,15,12,14];
-
   const leftRounds=[
     {rid:"r32",ms:leftR32order.map(i=>B.r32[i]),ws:B.r32w,n:8,c:0},
     {rid:"r16",ms:B.r16.slice(0,4),ws:B.r16w,n:4,c:1},
@@ -3802,41 +3754,28 @@ function buildPDFDoc(pid){
     {rid:"sf",ms:B.sf.slice(1,2),ws:B.sfw,n:1,c:5},
   ];
 
-  // Draw all rounds
   [...leftRounds,...rightRounds].forEach(({rid,ms,ws,n,c})=>{
     const x=colX(c);
-    roundLabel(lbls[rid]||rid,x+TW2/2,bTop-1);
-    ms.forEach((m,i)=>{
-      const y=mY(i,n);
-      drawBM(rid,m.id,x,y,m.h,m.a,ws[m.id]||null);
-    });
+    roundLabel(lbls2[rid]||rid,x+TW2/2,bTop-1);
+    ms.forEach((m,i)=>{const y=mY(i,n);drawBM(rid,m.id,x,y,m.h,m.a,ws[m.id]||null);});
   });
 
-  // ── Connectors left side ──
   for(let ri=0;ri<leftRounds.length-1;ri++){
     const cur=leftRounds[ri],nxt=leftRounds[ri+1];
     for(let i=0;i<cur.n;i+=2){
-      const y0=mY(i,cur.n)+mH2/2;
-      const y1=mY(i+1,cur.n)+mH2/2;
-      const yn=mY(i/2,nxt.n)+mH2/2;
-      const x0=colX(cur.c)+TW2, x1=colX(nxt.c);
-      const mx=(x0+x1)/2;
+      const y0=mY(i,cur.n)+mH2/2,y1=mY(i+1,cur.n)+mH2/2,yn=mY(i/2,nxt.n)+mH2/2;
+      const x0=colX(cur.c)+TW2,x1=colX(nxt.c),mx=(x0+x1)/2;
       doc.setDrawColor(150,170,210);doc.setLineWidth(.25);
       doc.lines([[mx-x0,0],[0,yn-y0]],x0,y0);
       doc.lines([[mx-x0,0],[0,yn-y1]],x0,y1);
       doc.line(mx,yn,x1,yn);
     }
   }
-
-  // ── Connectors right side ──
   for(let ri=0;ri<rightRounds.length-1;ri++){
     const cur=rightRounds[ri],nxt=rightRounds[ri+1];
     for(let i=0;i<cur.n;i+=2){
-      const y0=mY(i,cur.n)+mH2/2;
-      const y1=mY(i+1,cur.n)+mH2/2;
-      const yn=mY(i/2,nxt.n)+mH2/2;
-      const x0=colX(cur.c), x1=colX(nxt.c)+TW2;
-      const mx=(x0+x1)/2;
+      const y0=mY(i,cur.n)+mH2/2,y1=mY(i+1,cur.n)+mH2/2,yn=mY(i/2,nxt.n)+mH2/2;
+      const x0=colX(cur.c),x1=colX(nxt.c)+TW2,mx=(x0+x1)/2;
       doc.setDrawColor(150,170,210);doc.setLineWidth(.25);
       doc.lines([[mx-x0,0],[0,yn-y0]],x0,y0);
       doc.lines([[mx-x0,0],[0,yn-y1]],x0,y1);
@@ -3844,47 +3783,87 @@ function buildPDFDoc(pid){
     }
   }
 
-  // ── Center column: Final + 3rd place ──
-  const cx=colX(4);
-  const finY=bTop+bH*0.12;
-  const f3Y=bTop+bH*0.58;
-
-  roundLabel("⚽ FINAL",cx+TW2/2,bTop-1);
+  const cx=colX(4),finY=bTop+bH2*0.12,f3Y=bTop+bH2*0.58;
+  roundLabel("FINAL",cx+TW2/2,bTop-1);
   drawBM("final",0,cx,finY,B.fin.h,B.fin.a,B.finw[0]||null);
-
   col(120,80,20);font("bold",4.5);
-  doc.text("🥉 3ER LUGAR",cx+TW2/2,f3Y-1.5,{align:"center"});
+  doc.text("3ER LUGAR",cx+TW2/2,f3Y-1.5,{align:"center"});
   drawBM("f3",0,cx,f3Y,B.f3.h,B.f3.a,B.f3w[0]||null);
 
-  // SF → Final connectors
-  const sfLy=mY(0,1)+mH2/2;
-  const sfRy=mY(0,1)+mH2/2;
   doc.setDrawColor(150,170,210);doc.setLineWidth(.25);
-  doc.line(colX(3)+TW2, sfLy, cx, finY+TH2/2);
-  doc.line(colX(5), sfRy, cx+TW2, finY+TH2+.5+TH2/2);
+  doc.line(colX(3)+TW2,mY(0,1)+mH2/2,cx,finY+TH2/2);
+  doc.line(colX(5),mY(0,1)+mH2/2,cx+TW2,finY+TH2+.5+TH2/2);
 
-  // Champion box
   const chY=finY+mH2+3;
   if(B.champion){
     bg(10,20,50);doc.roundedRect(cx-1,chY,TW2+2,14,2,2,"F");
     doc.setDrawColor(255,200,0);doc.setLineWidth(.6);doc.roundedRect(cx-1,chY,TW2+2,14,2,2);
     col(255,200,0);font("bold",5.5);
-    doc.text("🏆 CAMPEÓN DEL MUNDO",cx+TW2/2,chY+5.5,{align:"center"});
+    doc.text("CAMPEON DEL MUNDO",cx+TW2/2,chY+5.5,{align:"center"});
     col(255,255,255);font("bold",7);
     doc.text(trunc(B.champion,12),cx+TW2/2,chY+11.5,{align:"center"});
   } else {
     bg(240,245,255);doc.roundedRect(cx-1,chY,TW2+2,14,2,2,"F");
     doc.setDrawColor(180,200,240);doc.setLineWidth(.3);doc.roundedRect(cx-1,chY,TW2+2,14,2,2);
     col(150,170,200);font("normal",5);
-    doc.text("🏆 CAMPEÓN",cx+TW2/2,chY+8,{align:"center"});
+    doc.text("CAMPEON",cx+TW2/2,chY+8,{align:"center"});
   }
 
-  // Footer p2
   bg(10,20,50);doc.rect(0,H-5,W,5,"F");
   col(180,190,210);font("normal",4);
-  doc.text(`${p.name}  |  Quiniela FIFA World Cup 2026  |  ${submitStr}  |  Pág. 2 de 2`,W/2,H-1.8,{align:"center"});
+  doc.text(p.name+"  |  Quiniela FIFA World Cup 2026  |  "+submitStr,W/2,H-1.8,{align:"center"});
+}
 
-  return doc;
+// ── LEAGUE PDF: All participants in one file ─────────────
+function generateLeaguePDF(lid){
+  if(!window.jspdf?.jsPDF){alert("PDF no disponible. Recarga la página.");return;}
+  const lg=STATE.leagues.find(l=>l.id===lid);
+  if(!lg){alert("Liga no encontrada.");return;}
+  const {jsPDF}=window.jspdf;
+  const members=lg.memberIds
+    .map(pid=>STATE.participants.find(x=>x.id===pid))
+    .filter(p=>p&&!p.hidden);
+  if(members.length===0){alert("No hay participantes en esta liga.");return;}
+
+  const W=297,H=210;
+  const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+
+  // ── COVER PAGE ──
+  doc.setFillColor(10,20,50);doc.rect(0,0,W,H,"F");
+  // Gold bar
+  doc.setFillColor(255,200,0);doc.rect(0,H*0.38,W,2,"F");
+  doc.setFillColor(255,200,0);doc.rect(0,H*0.62,W,2,"F");
+  // Title
+  doc.setTextColor(255,200,0);doc.setFont("helvetica","bold");doc.setFontSize(22);
+  doc.text("QUINIELA FIFA WORLD CUP 2026",W/2,H*0.3,{align:"center"});
+  // League name
+  doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(16);
+  doc.text(lg.name.toUpperCase(),W/2,H*0.5,{align:"center"});
+  // Subtitle
+  doc.setTextColor(150,170,200);doc.setFont("helvetica","normal");doc.setFontSize(9);
+  doc.text(members.length+" participante"+(members.length!==1?"s":"")+"  ·  Generado: "
+    +new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"}),
+    W/2,H*0.68,{align:"center"});
+  // Participant index
+  doc.setTextColor(180,190,210);doc.setFont("helvetica","normal");doc.setFontSize(7.5);
+  const colW=W/3, startY=H*0.74;
+  members.forEach((p,i)=>{
+    const cx=(i%3)*colW+colW/2, cy=startY+Math.floor(i/3)*8;
+    doc.text((i+1)+". "+p.name,cx,cy,{align:"center",maxWidth:colW-8});
+  });
+  // Footer
+  doc.setFillColor(0,0,0);doc.rect(0,H-6,W,6,"F");
+  doc.setTextColor(100,120,160);doc.setFont("helvetica","normal");doc.setFontSize(4.5);
+  doc.text("Quiniela FIFA World Cup 2026  ·  Documento de constancia  ·  "+lg.name,W/2,H-2,{align:"center"});
+
+  // ── ONE PARTICIPANT PER 2 PAGES ──
+  members.forEach((p,idx)=>{
+    try{ buildParticipantPages(doc, p.id, false); }
+    catch(e){ console.warn("PDF error for",p.name,e); }
+  });
+
+  const safeName=(lg.name||"liga").toLowerCase().replace(/[^a-z0-9]/gi,"-").replace(/-+/g,"-");
+  doc.save("quiniela-liga-"+safeName+".pdf");
 }
 
 function genPDF(pid){
