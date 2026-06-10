@@ -3841,8 +3841,8 @@ function renderProbResults(members,rankCounts,N,myPid,lgId){
   const results=members.map((p,i)=>{
     const c=rankCounts[i];
     const pct=c.map(x=>Math.round(x/N*1000)/10);
-    return {...p,p1:pct[0],p2:pct[1],p3:pct[2],
-      pPodio:Math.round((c[0]+c[1]+c[2])/N*1000)/10};
+    const pPodio=Math.round((c[0]+c[1]+c[2])/N*1000)/10;
+    return {...p,p1:pct[0],p2:pct[1],p3:pct[2], pPodio};
   }).sort((a,b)=>b.p1-a.p1);
 
   let html=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:.6rem;color:#889">
@@ -3920,7 +3920,7 @@ function renderProbResults(members,rankCounts,N,myPid,lgId){
           <div style="font-size:.62rem;color:#889;margin-top:2px">🏅 Podio</div>
         </div>
         <div style="flex:1;text-align:center;padding:.4rem 0">
-          <div style="font-size:1.6rem;font-weight:800;color:#445;line-height:1">${100-me.pPodio}%</div>
+          <div style="font-size:1.6rem;font-weight:800;color:#445;line-height:1">${Math.round((100-me.pPodio)*10)/10}%</div>
           <div style="font-size:.62rem;color:#556;margin-top:2px">❌ Fuera</div>
         </div>
       </div>
