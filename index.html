@@ -2290,14 +2290,33 @@ function hoyTab(pid,pred){
 
       <!-- League consensus (only if in a league with submitted players) -->
       ${stats?`
-      <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.45rem;margin-top:.0rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
-          <span style="font-size:.65rem;color:#667;letter-spacing:.5px">CONSENSO DE TU LIGA (${stats.total} quinielas)</span>
-          ${stats.topScore?`<span style="font-size:.65rem;background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.2);border-radius:4px;padding:.1rem .4rem">
-            Marcador más votado: <strong>${stats.topScore}</strong> (${stats.topScorePct}%)
-          </span>`:""}
+      <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.5rem;margin-top:.1rem">
+        <div style="font-size:.62rem;color:#667;letter-spacing:.5px;margin-bottom:.4rem">CONSENSO DE LA LIGA · ${stats.total} quiniela${stats.total!==1?"s":""}</div>
+        <!-- Result breakdown -->
+        <div style="display:flex;gap:.3rem;margin-bottom:.35rem">
+          <div style="flex:${stats.hPct||1};background:rgba(77,224,160,.12);border:1px solid rgba(77,224,160,.25);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:.85rem;font-weight:700;color:#4de0a0">${Math.round(stats.total*(stats.hPct/100))}</div>
+            <div style="font-size:.58rem;color:#4de0a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f(m.h)} ${stats.hPct}%</div>
+          </div>
+          <div style="flex:${stats.dPct||1};background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.18);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:.85rem;font-weight:700;color:#ffc800">${Math.round(stats.total*(stats.dPct/100))}</div>
+            <div style="font-size:.58rem;color:#ffc800">Empate ${stats.dPct}%</div>
+          </div>
+          <div style="flex:${stats.aPct||1};background:rgba(136,170,255,.08);border:1px solid rgba(136,170,255,.2);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:.85rem;font-weight:700;color:#88aaff">${Math.round(stats.total*(stats.aPct/100))}</div>
+            <div style="font-size:.58rem;color:#88aaff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${stats.aPct}% ${f(m.a)}</div>
+          </div>
         </div>
-        ${pctBar(stats.hPct,stats.dPct,stats.aPct,m.h,m.a)}
+        <!-- Progress bar -->
+        <div style="display:flex;border-radius:4px;overflow:hidden;height:4px;gap:1px;margin-bottom:.3rem">
+          ${stats.hPct>0?`<div style="background:#4de0a0;width:${stats.hPct}%"></div>`:""}
+          ${stats.dPct>0?`<div style="background:#ffc800;width:${stats.dPct}%"></div>`:""}
+          ${stats.aPct>0?`<div style="background:#88aaff;width:${stats.aPct}%"></div>`:""}
+        </div>
+        ${stats.topScore?`<div style="font-size:.65rem;color:#889">
+          Marcador más votado: <span style="background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:1px 6px;font-weight:700">${stats.topScore}</span>
+          <span style="color:#556">(${stats.topScoreCount} de ${stats.total} · ${stats.topScorePct}%)</span>
+        </div>`:""}
       </div>`:""}
     </div>`;
   });
@@ -2310,10 +2329,6 @@ function hoyTab(pid,pred){
       <div style="font-size:.75rem;font-weight:700;letter-spacing:1px;color:#ffc800">📅 ${todayStr.toUpperCase()}</div>
       <div style="font-size:.68rem;color:#889">${todayMatches.length} partido${todayMatches.length!==1?"s":""} hoy · ${playedToday} jugado${playedToday!==1?"s":""}</div>
     </div>
-    ${playedToday>0?`<div style="background:rgba(255,200,0,.1);border:1px solid rgba(255,200,0,.3);border-radius:10px;padding:.4rem .8rem;text-align:center">
-      <div style="font-size:1.4rem;font-weight:700;color:#ffc800;line-height:1">${dayPts}</div>
-      <div style="font-size:.6rem;color:#889">pts hoy</div>
-    </div>`:""}
   </div>
   ${!hasLeague?`<div style="font-size:.7rem;color:#667;margin-bottom:.5rem;text-align:center;font-style:italic">Únete a una liga para ver el consenso de los demás participantes</div>`:""}
   ${matchRows.join("")}`;
@@ -2352,49 +2367,14 @@ function pgMyScore(pid){
     <div class="score-banner">
       <div style="font-size:1.2rem;font-weight:700;color:#4de0a0;margin:.2rem 0">${p.name}</div>
       ${qn&&qn!==p.name?`<div style="font-size:.7rem;color:#ffc80099;margin-bottom:.2rem">"${qn}"</div>`:""}
-      <div class="score-big">${gPts}</div>
-      <div style="font-size:.75rem;color:#889;margin-top:.3rem">${gPts} pts grupos</div>
+      <div class="score-big">${scoreFull(pid)}</div>
+      <div style="font-size:.75rem;color:#889;margin-top:.3rem">puntaje total acumulado</div>
+      <div style="display:flex;gap:7px;justify-content:center;margin-top:7px;flex-wrap:wrap">
+        <span style="font-size:.68rem;padding:2px 9px;border-radius:12px;background:rgba(0,200,83,.1);color:#4de0a0;font-weight:600">⚽ Grupos: +${scoreGroups(pred.groups||{},STATE.actuals||{})}</span>
+        <span style="font-size:.68rem;padding:2px 9px;border-radius:12px;background:rgba(255,213,128,.1);color:#ffd580;font-weight:600">🎯 Clasif: +${scoreGroupAdvancement(pred)}</span>
+        <span style="font-size:.68rem;padding:2px 9px;border-radius:12px;background:rgba(136,170,255,.1);color:#88aaff;font-weight:600">🏆 KO: +${scoreKO(pred)}</span>
+      </div>
     </div>
-    ${(()=>{
-      const myLeagues=STATE.leagues.filter(l=>l.memberIds.includes(pid));
-      if(myLeagues.length===0) return "";
-      const medals=["🥇","🥈","🥉"];
-      return myLeagues.map(lg=>{
-        const rows=lg.memberIds.map(mid=>{
-          const mp=STATE.participants.find(x=>x.id===mid);
-          const qn2=STATE.predictions[mid]?.quinName||"";
-          const pts=lgScore(mid);
-          const isMe=mid===pid;
-          return {qn:qn2,name:mp?.name||"—",pts,isMe,hidden:mp?.hidden||false};
-        }).filter(r=>!r.hidden||r.isMe).sort((a,b)=>b.pts-a.pts);
-        const myPos=rows.findIndex(r=>r.isMe);
-        return `<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,200,0,.18);border-radius:12px;margin:.6rem 0;overflow:hidden">
-          <div style="background:rgba(255,200,0,.09);padding:.6rem .85rem;border-bottom:1px solid rgba(255,200,0,.14)">
-              <div style="font-weight:700;font-size:.92rem;color:#ffc800">${lg.name}</div>
-              <div style="font-size:.65rem;color:#889;margin-top:.1rem">
-                Posición: <strong style="color:#ffc800">#${myPos+1}</strong> de ${rows.length} · Código: <span class="league-code">${lg.code}</span>
-              </div>
-          </div>
-          <div style="padding:.5rem .7rem;display:flex;flex-direction:column;gap:.22rem">
-            ${rows.map((r,i)=>`
-            <div style="display:flex;align-items:center;gap:.55rem;padding:.44rem .65rem;border-radius:8px;
-              background:${r.isMe?"rgba(255,200,0,.1)":"rgba(255,255,255,.04)"};
-              border:1px solid ${r.isMe?"rgba(255,200,0,.35)":"rgba(255,255,255,.07)"}">
-              <span style="width:22px;text-align:center;font-size:${i<3?"1rem":".78rem"};flex-shrink:0">${medals[i]||"#"+(i+1)}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:.85rem;font-weight:${r.isMe?"700":"500"};color:${r.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                  ${r.name}${r.isMe?` <span style="font-size:.6rem;color:#ffc80066;font-weight:400">← tú</span>`:""}
-                </div>
-                ${r.qn&&r.qn!==r.name?`<div style="font-size:.62rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${r.qn}"</div>`:""}
-              </div>
-              <span style="font-size:1.05rem;font-weight:700;color:${r.isMe?"#ffc800":"#aab"};flex-shrink:0">
-                ${r.pts}<small style="font-size:.52rem;color:#556;margin-left:1px">pts</small>
-              </span>
-            </div>`).join("")}
-          </div>
-        </div>`;
-      }).join("");
-    })()}
   `:""}
   ${tab==="predictions"?`
     <div class="grp-tabs" style="overflow-x:auto;white-space:nowrap">
