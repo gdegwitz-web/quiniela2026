@@ -1960,6 +1960,8 @@ function pgPredict(pid){
   if(!p){go("landing");return""}
   if(p.paid===false) return pgPaymentWall(p);
 
+  const pred=STATE.predictions[pid]||{groups:{},ko:{},quinName:"",submitted:false};
+
   // ── DEADLINE: predicciones bloqueadas después de las 3PM ET ──
   if(new Date() >= REGISTRATION_DEADLINE){
     if((STATE.predictions[pid]||{}).submitted){
