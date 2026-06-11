@@ -801,7 +801,7 @@ const SESSION={
     try{if(v)localStorage.setItem(SESSION_KEY,v);else localStorage.removeItem(SESSION_KEY);}catch(e){}
   }
 };
-function logout(){SESSION.pid=null;go("landing");}
+function logout(){SESSION.pid=null;SESSION.isAdmin=false;localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));go("landing");}
 function requireSession(pid){
   if(SESSION.pid!==pid) go("returning");
 }
@@ -1375,7 +1375,10 @@ function renderApp(){
     else if(r.page==="myscore")     app.innerHTML=pgMyScore(r.pid);
     else if(r.page==="league")      app.innerHTML=pgLeague(r.lid,r.pid);
     else if(r.page==="admin_login") app.innerHTML=pgAdminLogin();
-    else if(r.page==="admin")       app.innerHTML=pgAdmin(r.tab||"results");
+    else if(r.page==="admin"){
+      if(!SESSION.isAdmin){go("admin_login");return;}
+      app.innerHTML=pgAdmin(r.tab||"results");
+    }
     else if(r.page==="leaderboard") app.innerHTML=pgLeaderboard(r.tab||"global");
   }catch(err){
     console.error("renderApp error:",err);
@@ -1955,7 +1958,24 @@ function pgPredict(pid){
   if(SESSION.pid!==pid){go("returning");return"";}
   const p=STATE.participants.find(x=>x.id===pid);
   if(!p){go("landing");return""}
-  const pred=STATE.predictions[pid]||{groups:{},ko:{},quinName:"",submitted:false};
+  if(p.paid===false) return pgPaymentWall(p);
+
+  // ── DEADLINE: predicciones bloqueadas después de las 3PM ET ──
+  if(new Date() >= REGISTRATION_DEADLINE){
+    if((STATE.predictions[pid]||{}).submitted){
+      go('myscore',{pid}); return '';
+    }
+    return `<div style="min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center">
+      <div style="font-size:4rem;margin-bottom:1rem">⏰</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#ff8080;margin-bottom:.5rem">Registro Cerrado</div>
+      <div style="font-size:.82rem;color:#889;line-height:1.65;max-width:270px;margin-bottom:1.5rem">
+        El plazo venció el <strong style="color:#eee">11 de Junio a las 3:00 PM ET</strong>.<br><br>
+        Tu quiniela no fue enviada a tiempo para esta edición.
+      </div>
+      <button onclick="logout()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#889;font-size:.8rem;padding:.6rem 1.5rem;cursor:pointer">🔙 Volver</button>
+    </div>`;
+  }
+
   if(!pred.groups) pred.groups={};
   if(!pred.ko) pred.ko={};
   const tab=ROUTE.subtab||"groups";
@@ -2335,11 +2355,46 @@ function hoyTab(pid,pred){
 }
 
 
+function pgPaymentWall(p){
+  const msgs=[
+    {emoji:"🚧",title:"¡Acceso Bloqueado, Crack!",body:"Tus predicciones te esperan ahí adentro, calentitas. Pero el organizador dice que primero hay que arreglar un pequeño detalle llamado... pago."},
+    {emoji:"🪙",title:"Error 402: Payment Required",body:"Tu usuario existe. Tu quiniela existe. Tu pago, en cambio, parece estar en modo fantasma. El organizador tiene el poder de resucitarlo."},
+    {emoji:"🔐",title:"Zona Restringida",body:"Felicidades, encontraste el contenido premium. Para acceder, el procedimiento es simple: habla con el organizador y resuelve ese pendiente."},
+    {emoji:"📵",title:"Tu Acceso fue Pausado",body:"No es nada personal. Bueno, sí lo es un poco. El organizador ha pausado tu cuenta temporalmente. Ya sabes lo que tienes que hacer."},
+    {emoji:"🎭",title:"¡Sorpresa!",body:"Pensabas que ibas a ver tus predicciones, ¿verdad? Hoy el organizador tiene un mensaje especial para ti: primero lo primero."},
+    {emoji:"💀",title:"Tu Cuenta está en el Limbo",body:"No estás dentro, no estás fuera. Flotas en el universo paralelo de los que aún no han resuelto su situación con el organizador."},
+  ];
+  const m=msgs[Math.abs((p.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0))%msgs.length];
+  return `
+  <div style="min-height:88vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;background:radial-gradient(ellipse at 50% 30%,rgba(255,80,80,.06),transparent 70%)">
+    <div style="font-size:5.5rem;margin-bottom:.8rem;animation:bounce .9s ease-in-out infinite alternate">${m.emoji}</div>
+    <div style="font-size:1.25rem;font-weight:800;color:#ffc800;margin-bottom:.5rem;line-height:1.2">${m.title}</div>
+    <div style="font-size:.8rem;color:#889;line-height:1.65;max-width:270px;margin-bottom:1.6rem">${m.body}</div>
+
+    <div style="background:rgba(255,60,60,.07);border:2px dashed rgba(255,80,80,.3);border-radius:14px;padding:1rem 1.4rem;margin-bottom:1.4rem;max-width:270px;width:100%">
+      <div style="font-size:.58rem;color:#ff8080;letter-spacing:2px;font-weight:700;margin-bottom:.5rem">⛔ ESTADO DE ACCESO</div>
+      <div style="font-size:.95rem;font-weight:700;color:#ff8080">🔒 Acceso bloqueado</div>
+      <div style="font-size:.75rem;color:#667;margin-top:.3rem;font-weight:600">${p.name}</div>
+    </div>
+
+    <div style="font-size:.73rem;color:#556;line-height:1.6;margin-bottom:1.6rem;max-width:250px">
+      ¿Ya está todo en orden? Dile al organizador que<br>te habilite el acceso. ¡El Mundial no espera!
+    </div>
+
+    <button onclick="logout()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#778;font-size:.78rem;padding:.55rem 1.4rem;cursor:pointer">
+      🔄 Intentar con otra cuenta
+    </button>
+  </div>
+  <style>@keyframes bounce{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-14px) rotate(3deg)}}</style>`;
+}
+
 function pgMyScore(pid){
   // Security: require active session
   if(SESSION.pid!==pid){go("returning");return"";}
   const p=STATE.participants.find(x=>x.id===pid);
   if(!p){go("landing");return""}
+  // Payment wall — only p.paid===false blocks (undefined = allowed, backward compatible)
+  if(p.paid===false) return pgPaymentWall(p);
   const pred=STATE.predictions[pid]||{};
   if(!pred.groups) pred.groups={};
   if(!pred.ko) pred.ko={};
@@ -2757,7 +2812,11 @@ function pgAdminLogin(){
   </div>`;
 }
 function doAdminLogin(){
-  if(val("ap")===ADMIN_PWD){go("admin");return}
+  if(val("ap")===ADMIN_PWD){
+    SESSION.isAdmin=true;
+    localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));
+    go("admin");return;
+  }
   setErr("aerr","⚠ Contraseña incorrecta");document.getElementById("ap").value="";
 }
 
@@ -2807,7 +2866,18 @@ function pgAdmin(tab){
     `}
   </div>`:""}
   ${tab==="participants"?`<div class="card">
-    <h2>GESTIÓN DE PARTICIPANTES</h2>
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+      <h2 style="flex:1;margin:0">GESTIÓN DE PARTICIPANTES</h2>
+      ${ps.length>0?`
+      <button onclick="adminToggleAllAccess(true)"
+        style="background:rgba(0,200,83,.12);color:#4de0a0;border:1px solid rgba(0,200,83,.28);border-radius:7px;padding:.28rem .6rem;font-size:.65rem;font-weight:700;cursor:pointer;flex-shrink:0">
+        ✅ Habilitar todos
+      </button>
+      <button onclick="adminToggleAllAccess(false)"
+        style="background:rgba(255,80,80,.1);color:#ff8080;border:1px solid rgba(255,80,80,.25);border-radius:7px;padding:.28rem .6rem;font-size:.65rem;font-weight:700;cursor:pointer;flex-shrink:0">
+        🔒 Bloquear todos
+      </button>`:""}
+    </div>
     ${ps.length===0?`<p style="color:#667;font-size:.82rem;text-align:center;padding:.7rem">No hay participantes aún.</p>`:""}
     ${ps.map(p=>{
       const sub=STATE.predictions[p.id]?.submitted;
@@ -2824,6 +2894,13 @@ function pgAdmin(tab){
           </div>
           <button onclick="document.getElementById('${expandId}').classList.toggle('open')"
             style="background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🏅</button>
+          <div onclick="adminTogglePaid('${p.id}')" title="${p.paid?'Tiene acceso — click para revocar':'Sin acceso — click para habilitar'}"
+            style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;flex-shrink:0;user-select:none;padding:0 2px">
+            <div style="width:36px;height:20px;border-radius:10px;background:${p.paid?'#00c853':'rgba(255,80,80,.25)'};border:1px solid ${p.paid?'rgba(0,200,83,.5)':'rgba(255,80,80,.4)'};position:relative;transition:background .2s">
+              <div style="width:16px;height:16px;border-radius:8px;background:#fff;position:absolute;top:1px;${p.paid?'right:1px':'left:1px'};box-shadow:0 1px 3px rgba(0,0,0,.4);transition:all .2s"></div>
+            </div>
+            <div style="font-size:.48rem;font-weight:700;color:${p.paid?'#4de0a0':'#ff8080'};letter-spacing:.5px">${p.paid?'ACCESO':'BLOQUEADO'}</div>
+          </div>
           <button onclick="adminResetPassword('${p.id}')" style="background:rgba(80,180,255,.1);color:#7ad4ff;border:1px solid rgba(80,180,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="Resetear contraseña">🔑</button>
           <button onclick="toggleHide('${p.id}')" style="background:rgba(100,150,255,.1);color:#7aafff;border:1px solid rgba(100,150,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">${p.hidden?"👁️":"🙈"}</button>
           <button onclick="deletePart('${p.id}')" style="background:rgba(255,60,60,.1);color:#ff7070;border:1px solid rgba(255,60,60,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🗑️</button>
@@ -3316,7 +3393,11 @@ function saveForLater(pid){
 }
 
 function submitPrediction(pid){
-  if(!STATE.predictions[pid])return;
+  if(!STATE.predictions[pid]) return;
+  if(new Date() >= REGISTRATION_DEADLINE){
+    showFlash("⛔ El registro ya cerró a las 3:00 PM ET");
+    return;
+  }
   STATE.predictions[pid].submitted=true;
   STATE.predictions[pid].submittedAt=new Date().toISOString();
   go("myscore",{pid});
@@ -4003,6 +4084,55 @@ function renderProbResults(members,rankCounts,N,myPid,lgId){
 }
 
 // Admin toggle showProb for a league
+let _bulkWriteTimers=[];
+
+function adminTogglePaid(pid){
+  _bulkWriteTimers.forEach(t=>clearTimeout(t));
+  _bulkWriteTimers=[];
+  const p=STATE.participants.find(x=>x.id===pid);
+  if(!p) return;
+  p.paid=!p.paid;
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  // Write only the paid field for this one participant
+  if(window._fbDB){
+    window._fbDB.ref('q2026/participants/'+pid+'/paid').set(p.paid);
+  }
+  go('admin',{tab:'participants'});
+  showFlash(p.paid?'✅ Acceso habilitado para '+p.name:'🔒 Acceso bloqueado para '+p.name);
+}
+
+function adminToggleAllAccess(enable){
+  const label=enable?'habilitar acceso a TODOS':'BLOQUEAR acceso a todos';
+  if(!confirm(`¿Confirmas que quieres ${label} los participantes?`)) return;
+
+  _bulkWriteTimers.forEach(t=>clearTimeout(t));
+  _bulkWriteTimers=[];
+
+  const toUpdate=[];
+  STATE.participants.forEach(p=>{
+    if(p.paid!==enable){ p.paid=enable; toUpdate.push(p.id); }
+  });
+
+  if(toUpdate.length===0){
+    showFlash(enable?'✅ Todos ya tienen acceso':'🔒 Todos ya están bloqueados');
+    return;
+  }
+
+  // Save STATE locally first
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  go('admin',{tab:'participants'});
+  showFlash(enable
+    ? `✅ Acceso habilitado para ${toUpdate.length} participante${toUpdate.length!==1?'s':''}`
+    : `🔒 Acceso bloqueado para ${toUpdate.length} participante${toUpdate.length!==1?'s':''}`);
+
+  // Single atomic Firebase update — writes all paid fields at once, triggers onValue only ONCE
+  if(window._fbDB){
+    const updates={};
+    toUpdate.forEach(pid=>{ updates['participants/'+pid+'/paid']=enable; });
+    window._fbDB.ref('q2026').update(updates);
+  }
+}
+
 function adminToggleLeagueProb(lid){
   const lg=STATE.leagues.find(l=>l.id===lid);
   if(!lg) return;
