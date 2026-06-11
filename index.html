@@ -793,15 +793,22 @@ function togglePwd(id){
 
 // ─── SESSION — persisted in localStorage for auto-login ───
 const SESSION_KEY="q2026_session";
+const ADMIN_SESSION_KEY="q2026_admin";
 const SESSION={
   get pid(){
     try{return localStorage.getItem(SESSION_KEY)||null;}catch(e){return null;}
   },
   set pid(v){
     try{if(v)localStorage.setItem(SESSION_KEY,v);else localStorage.removeItem(SESSION_KEY);}catch(e){}
+  },
+  get isAdmin(){
+    try{return localStorage.getItem(ADMIN_SESSION_KEY)==="1";}catch(e){return false;}
+  },
+  set isAdmin(v){
+    try{if(v)localStorage.setItem(ADMIN_SESSION_KEY,"1");else localStorage.removeItem(ADMIN_SESSION_KEY);}catch(e){}
   }
 };
-function logout(){SESSION.pid=null;SESSION.isAdmin=false;localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));go("landing");}
+function logout(){SESSION.pid=null;SESSION.isAdmin=false;go("landing");}
 function requireSession(pid){
   if(SESSION.pid!==pid) go("returning");
 }
@@ -1693,7 +1700,8 @@ function pgLanding(){
   const registrationClosed=new Date()>=REGISTRATION_DEADLINE;
 
   // If registration is closed and no active session → go directly to login
-  if(registrationClosed && !activeP){
+  // But NOT if admin is already logged in
+  if(registrationClosed && !activeP && !SESSION.isAdmin){
     setTimeout(function(){ go("returning"); }, 0);
     return heroHTML()+`<div style="text-align:center;padding:1.5rem">
       <div style="font-size:.85rem;color:#ffc800;margin-bottom:.4rem">⏰ El registro está cerrado</div>
@@ -1919,6 +1927,7 @@ function pgReturning(){
     <div class="err" id="li-perr"></div>
     <button class="btn-green" onclick="doLogin()">🔓 INGRESAR</button>
     <button class="btn-gray" onclick="go('landing')">← Volver</button>
+    <button onclick="go('admin_login')" style="display:block;width:100%;margin-top:.5rem;padding:.45rem;background:none;border:1px solid rgba(124,58,237,.2);border-radius:9px;color:rgba(192,132,252,.5);font-size:.7rem;cursor:pointer">⚙️ Acceso Administrador</button>
     <div style="margin-top:.8rem;padding:.7rem .9rem;background:rgba(255,200,0,.05);border:1px solid rgba(255,200,0,.12);border-radius:8px;text-align:center">
       <div style="font-size:.72rem;color:#ffc800;font-weight:600;margin-bottom:.2rem">🔑 ¿Olvidaste tu contraseña?</div>
       <div style="font-size:.7rem;color:#889;line-height:1.5">Contacta al organizador para que la restablezca desde el panel de administración.</div>
@@ -1966,8 +1975,8 @@ function pgPredict(pid){
 
   const pred=STATE.predictions[pid]||{groups:{},ko:{},quinName:"",submitted:false};
 
-  // ── DEADLINE: predicciones bloqueadas después de las 3PM ET ──
-  if(new Date() >= REGISTRATION_DEADLINE){
+// ── DEADLINE: predicciones bloqueadas después de las 3PM ET ──
+  if(new Date() >= REGISTRATION_DEADLINE && !ROUTE.adminOverride && !SESSION.isAdmin){
     if((STATE.predictions[pid]||{}).submitted){
       go('myscore',{pid}); return '';
     }
@@ -2930,7 +2939,6 @@ function pgAdminLogin(){
 function doAdminLogin(){
   if(val("ap")===ADMIN_PWD){
     SESSION.isAdmin=true;
-    localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));
     go("admin");return;
   }
   setErr("aerr","⚠ Contraseña incorrecta");document.getElementById("ap").value="";
@@ -2993,7 +3001,36 @@ function pgAdmin(tab){
         style="background:rgba(255,80,80,.1);color:#ff8080;border:1px solid rgba(255,80,80,.25);border-radius:7px;padding:.28rem .6rem;font-size:.65rem;font-weight:700;cursor:pointer;flex-shrink:0">
         🔒 Bloquear todos
       </button>`:""}
+      <button onclick="document.getElementById('admin-emergency-form').style.display=document.getElementById('admin-emergency-form').style.display==='none'?'block':'none'"
+        style="background:rgba(255,150,0,.12);color:#ffaa44;border:1px solid rgba(255,150,0,.3);border-radius:7px;padding:.28rem .6rem;font-size:.65rem;font-weight:700;cursor:pointer;flex-shrink:0">
+        ⚡ Nueva quiniela
+      </button>
     </div>
+
+    <!-- Emergency registration form -->
+    <div id="admin-emergency-form" style="display:none;background:rgba(255,150,0,.06);border:1px solid rgba(255,150,0,.25);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="font-size:.62rem;color:#ffaa44;font-weight:700;letter-spacing:1px;margin-bottom:8px">⚡ REGISTRO DE EMERGENCIA — bypassa el plazo</div>
+      <label style="font-size:.6rem;color:#889;display:block;margin-bottom:3px">NOMBRE COMPLETO</label>
+      <input id="adm-em-name" type="text" placeholder="Carlos García" style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#eee;padding:.4rem .6rem;font-size:.78rem;margin-bottom:6px;outline:none">
+      <label style="font-size:.6rem;color:#889;display:block;margin-bottom:3px">CORREO ELECTRÓNICO</label>
+      <input id="adm-em-email" type="email" placeholder="carlos@email.com" style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#eee;padding:.4rem .6rem;font-size:.78rem;margin-bottom:6px;outline:none">
+      <label style="font-size:.6rem;color:#889;display:block;margin-bottom:3px">NOMBRE DE QUINIELA</label>
+      <input id="adm-em-qname" type="text" placeholder="La Quiniela de Carlos" style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#eee;padding:.4rem .6rem;font-size:.78rem;margin-bottom:6px;outline:none">
+      <label style="font-size:.6rem;color:#889;display:block;margin-bottom:3px">CONTRASEÑA TEMPORAL</label>
+      <input id="adm-em-pwd" type="text" placeholder="Mínimo 4 caracteres" style="width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#eee;padding:.4rem .6rem;font-size:.78rem;margin-bottom:8px;outline:none">
+      <div id="adm-em-err" style="font-size:.7rem;color:#ff8080;margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px">
+        <button onclick="adminEmergencyRegister()"
+          style="flex:1;background:rgba(255,150,0,.2);color:#ffaa44;border:1px solid rgba(255,150,0,.4);border-radius:7px;padding:.45rem;font-size:.78rem;font-weight:700;cursor:pointer">
+          ⚡ Crear y abrir predicciones
+        </button>
+        <button onclick="document.getElementById('admin-emergency-form').style.display='none'"
+          style="background:rgba(255,255,255,.06);color:#889;border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:.45rem .8rem;font-size:.78rem;cursor:pointer">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
     ${ps.length===0?`<p style="color:#667;font-size:.82rem;text-align:center;padding:.7rem">No hay participantes aún.</p>`:""}
     ${ps.map(p=>{
       const sub=STATE.predictions[p.id]?.submitted;
@@ -3017,6 +3054,7 @@ function pgAdmin(tab){
             </div>
             <div style="font-size:.48rem;font-weight:700;color:${p.paid?'#4de0a0':'#ff8080'};letter-spacing:.5px">${p.paid?'ACCESO':'BLOQUEADO'}</div>
           </div>
+          <button onclick="adminEditPredictions('${p.id}')" style="background:rgba(255,150,0,.1);color:#ffaa44;border:1px solid rgba(255,150,0,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="Editar predicciones de este usuario">✏️</button>
           <button onclick="adminResetPassword('${p.id}')" style="background:rgba(80,180,255,.1);color:#7ad4ff;border:1px solid rgba(80,180,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="Resetear contraseña">🔑</button>
           <button onclick="toggleHide('${p.id}')" style="background:rgba(100,150,255,.1);color:#7aafff;border:1px solid rgba(100,150,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">${p.hidden?"👁️":"🙈"}</button>
           <button onclick="deletePart('${p.id}')" style="background:rgba(255,60,60,.1);color:#ff7070;border:1px solid rgba(255,60,60,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🗑️</button>
@@ -3510,7 +3548,7 @@ function saveForLater(pid){
 
 function submitPrediction(pid){
   if(!STATE.predictions[pid]) return;
-  if(new Date() >= REGISTRATION_DEADLINE){
+  if(new Date() >= REGISTRATION_DEADLINE && !ROUTE.adminOverride && !SESSION.isAdmin){
     showFlash("⛔ El registro ya cerró a las 3:00 PM ET");
     return;
   }
@@ -4202,6 +4240,47 @@ function renderProbResults(members,rankCounts,N,myPid,lgId){
 // Admin toggle showProb for a league
 let _bulkWriteTimers=[];
 
+function adminEditPredictions(pid){
+  const p=STATE.participants.find(x=>x.id===pid);
+  if(!p) return;
+  if(!confirm("¿Abrir las predicciones de "+p.name+" para editarlas?\n\nPodrás completar o modificar su quiniela en nombre suyo.")) return;
+  SESSION.pid=pid;
+  go('predict',{pid,adminOverride:true});
+}
+
+function adminEmergencyRegister(){
+  const name=document.getElementById('adm-em-name')?.value.trim()||"";
+  const email=document.getElementById('adm-em-email')?.value.trim().toLowerCase()||"";
+  const qname=document.getElementById('adm-em-qname')?.value.trim()||"";
+  const pwd=document.getElementById('adm-em-pwd')?.value.trim()||"";
+  const errEl=document.getElementById('adm-em-err');
+
+  if(!name){errEl.textContent="⚠ Escribe el nombre";return;}
+  if(!email||!email.includes('@')){errEl.textContent="⚠ Correo inválido";return;}
+  if(pwd.length<4){errEl.textContent="⚠ Contraseña mínimo 4 caracteres";return;}
+  if(STATE.participants.find(x=>x.email&&x.email.toLowerCase()===email)){
+    errEl.textContent="⚠ Ya existe un participante con ese correo";return;
+  }
+  errEl.textContent="";
+
+  const pid=uid();
+  hashPwdStrong(pwd).then(function(hash){
+    const newP={id:pid,name,email,paid:true};
+    STATE.participants.push(newP);
+    STATE.predictions[pid]={
+      groups:{},ko:{},quinName:qname||name,
+      pwdHash:hash,submitted:false,submittedAt:null,emailSent:false
+    };
+    localStorage.setItem(LS,JSON.stringify(STATE));
+    fbWriteParticipant(pid);
+    showFlash("✅ "+name+" registrado — abriendo predicciones...");
+    // Open predict page in admin-override mode (bypasses deadline)
+    SESSION.pid=pid;
+    go('predict',{pid,adminOverride:true});
+  });
+}
+
+
 function adminTogglePaid(pid){
   _bulkWriteTimers.forEach(t=>clearTimeout(t));
   _bulkWriteTimers=[];
@@ -4209,7 +4288,6 @@ function adminTogglePaid(pid){
   if(!p) return;
   p.paid=!p.paid;
   localStorage.setItem(LS,JSON.stringify(STATE));
-  // Write only the paid field for this one participant
   if(window._fbDB){
     window._fbDB.ref('q2026/participants/'+pid+'/paid').set(p.paid);
   }
