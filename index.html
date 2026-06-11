@@ -2286,55 +2286,68 @@ function hoyTab(pid,pred){
 
     const stats=matchStats(m.id);
 
-    return `<div style="background:${bgCol};border:1px solid ${borderCol};border-radius:9px;padding:.6rem .75rem;margin:.3rem 0">
+    return `<div style="background:${bgCol};border:1px solid ${borderCol};border-radius:12px;padding:.85rem .9rem;margin:.5rem 0">
 
-      <!-- Match header -->
-      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.4rem;margin-bottom:.35rem">
-        <div style="font-size:.78rem;font-weight:600">${f(m.h)} ${trunc(m.h,10)}</div>
-        <div style="text-align:center">
-          ${ac&&ac.h!==""
-            ? "<div style=\"font-size:.95rem;font-weight:700;color:#eee\">"+ac.h+":"+ac.a+"</div><div style=\"font-size:.6rem;color:#667\">resultado</div>"
-            : "<div style=\"font-size:.75rem;color:#556\">vs</div>"
-          }
-        </div>
-        <div style="font-size:.78rem;font-weight:600;text-align:right">${trunc(m.a,10)} ${f(m.a)}</div>
+      <!-- Group + status header -->
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+        <span style="font-size:.65rem;font-weight:700;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.1rem .5rem">GRUPO ${m.g}</span>
+        <span style="font-size:.65rem;color:#556;margin-left:auto">${m.date||""}</span>
+        ${ac&&ac.h!==""?`<span style="font-size:.65rem;font-weight:700;color:#4de0a0">✓ FT</span>`:
+          `<span style="font-size:.65rem;color:#667">⏳ Pendiente</span>`}
       </div>
 
-      <!-- My prediction + points -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding-bottom:${stats?".45rem":".0rem"}">
-        <div style="font-size:.72rem;color:#889">
-          Mi predicción: <strong style="color:${pr&&pr.h!==""?"#eee":"#556"}">${pr&&pr.h!==""?pr.h+":"+pr.a:"—"}</strong>
+      <!-- Teams & score -->
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.5rem;margin-bottom:.7rem">
+        <div style="min-width:0">
+          <div style="font-size:1rem">${f(m.h)}</div>
+          <div style="font-size:.85rem;font-weight:700;color:#eee;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.h}</div>
+        </div>
+        <div style="text-align:center;min-width:52px">
+          ${ac&&ac.h!==""
+            ? `<div style="font-size:1.35rem;font-weight:800;color:#eee;line-height:1">${ac.h} : ${ac.a}</div><div style="font-size:.6rem;color:#667;margin-top:2px">resultado</div>`
+            : `<div style="font-size:.85rem;color:#445;font-weight:600">vs</div>`
+          }
+        </div>
+        <div style="text-align:right;min-width:0">
+          <div style="font-size:1rem">${f(m.a)}</div>
+          <div style="font-size:.85rem;font-weight:700;color:#eee;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.a}</div>
+        </div>
+      </div>
+
+      <!-- My prediction + points badge -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.55rem .7rem;background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.15);border-radius:8px;margin-bottom:${stats?".6rem":".0rem"}">
+        <div>
+          <div style="font-size:.62rem;color:#ffc80088;font-weight:700;letter-spacing:.5px;margin-bottom:2px">MI PREDICCIÓN</div>
+          <div style="font-size:1.2rem;font-weight:800;color:${pr&&pr.h!==""?"#ffc800":"#445"};line-height:1">${pr&&pr.h!==""?pr.h+" - "+pr.a:"—"}</div>
         </div>
         <div>${badge}</div>
       </div>
 
-      <!-- League consensus (only if in a league with submitted players) -->
+      <!-- League consensus -->
       ${stats?`
-      <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.5rem;margin-top:.1rem">
-        <div style="font-size:.62rem;color:#667;letter-spacing:.5px;margin-bottom:.4rem">CONSENSO DE LA LIGA · ${stats.total} quiniela${stats.total!==1?"s":""}</div>
-        <!-- Result breakdown -->
-        <div style="display:flex;gap:.3rem;margin-bottom:.35rem">
-          <div style="flex:${stats.hPct||1};background:rgba(77,224,160,.12);border:1px solid rgba(77,224,160,.25);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
-            <div style="font-size:.85rem;font-weight:700;color:#4de0a0">${Math.round(stats.total*(stats.hPct/100))}</div>
-            <div style="font-size:.58rem;color:#4de0a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f(m.h)} ${stats.hPct}%</div>
+      <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:.6rem">
+        <div style="font-size:.68rem;color:#667;letter-spacing:.5px;margin-bottom:.5rem;font-weight:600">CONSENSO DE LA LIGA · ${stats.total} quiniela${stats.total!==1?"s":""}</div>
+        <div style="display:flex;gap:.35rem;margin-bottom:.4rem">
+          <div style="flex:${stats.hPct||1};background:rgba(77,224,160,.12);border:1px solid rgba(77,224,160,.25);border-radius:8px;padding:.45rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:1.2rem;font-weight:800;color:#4de0a0;line-height:1">${Math.round(stats.total*(stats.hPct/100))}</div>
+            <div style="font-size:.65rem;color:#4de0a0;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f(m.h)} ${stats.hPct}%</div>
           </div>
-          <div style="flex:${stats.dPct||1};background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.18);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
-            <div style="font-size:.85rem;font-weight:700;color:#ffc800">${Math.round(stats.total*(stats.dPct/100))}</div>
-            <div style="font-size:.58rem;color:#ffc800">Empate ${stats.dPct}%</div>
+          <div style="flex:${stats.dPct||1};background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.18);border-radius:8px;padding:.45rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:1.2rem;font-weight:800;color:#ffc800;line-height:1">${Math.round(stats.total*(stats.dPct/100))}</div>
+            <div style="font-size:.65rem;color:#ffc800;margin-top:3px">Empate ${stats.dPct}%</div>
           </div>
-          <div style="flex:${stats.aPct||1};background:rgba(136,170,255,.08);border:1px solid rgba(136,170,255,.2);border-radius:6px;padding:.3rem .4rem;text-align:center;min-width:0">
-            <div style="font-size:.85rem;font-weight:700;color:#88aaff">${Math.round(stats.total*(stats.aPct/100))}</div>
-            <div style="font-size:.58rem;color:#88aaff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${stats.aPct}% ${f(m.a)}</div>
+          <div style="flex:${stats.aPct||1};background:rgba(136,170,255,.08);border:1px solid rgba(136,170,255,.2);border-radius:8px;padding:.45rem .4rem;text-align:center;min-width:0">
+            <div style="font-size:1.2rem;font-weight:800;color:#88aaff;line-height:1">${Math.round(stats.total*(stats.aPct/100))}</div>
+            <div style="font-size:.65rem;color:#88aaff;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${stats.aPct}% ${f(m.a)}</div>
           </div>
         </div>
-        <!-- Progress bar -->
-        <div style="display:flex;border-radius:4px;overflow:hidden;height:4px;gap:1px;margin-bottom:.3rem">
+        <div style="display:flex;border-radius:4px;overflow:hidden;height:5px;gap:1px;margin-bottom:.4rem">
           ${stats.hPct>0?`<div style="background:#4de0a0;width:${stats.hPct}%"></div>`:""}
           ${stats.dPct>0?`<div style="background:#ffc800;width:${stats.dPct}%"></div>`:""}
           ${stats.aPct>0?`<div style="background:#88aaff;width:${stats.aPct}%"></div>`:""}
         </div>
-        ${stats.topScore?`<div style="font-size:.65rem;color:#889">
-          Marcador más votado: <span style="background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:1px 6px;font-weight:700">${stats.topScore}</span>
+        ${stats.topScore?`<div style="font-size:.72rem;color:#889">
+          Marcador más votado: <span style="background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:2px 8px;font-weight:700;font-size:.78rem">${stats.topScore}</span>
           <span style="color:#556">(${stats.topScoreCount} de ${stats.total} · ${stats.topScorePct}%)</span>
         </div>`:""}
       </div>`:""}
