@@ -3940,16 +3940,23 @@ function _simFullTournament(){
   // R32 qualifiers set
   const r32Teams=new Set(r32Matches.flatMap(m=>[m.h,m.a].filter(Boolean)));
 
-  // Simulate KO rounds using hardcoded bracket
-  const r32w=r32Matches.map(m=>_simKOMatch(m.h,m.a));
-  const r16w=_R16P.map(([a,b])=>_simKOMatch(r32w[a],r32w[b]));
-  const qfw=_QFP.map(([a,b])=>_simKOMatch(r16w[a],r16w[b]));
-  const sfw=_SFP.map(([a,b])=>_simKOMatch(qfw[a],qfw[b]));
+  // Confirmed KO actuals from admin
+  const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+
+  // Use confirmed result if admin entered it, otherwise simulate by team strength
+  const ko=(rnd,i,tH,tA)=>(aKO[rnd]||{})[i] || _simKOMatch(tH,tA);
+
+  // KO rounds — confirmed results are fixed, pending ones are simulated
+  const r32w=r32Matches.map((m,i)=>ko('r32',i,m.h,m.a));
+  const r16w=_R16P.map(([a,b],i)=>ko('r16',i,r32w[a],r32w[b]));
+  const qfw=_QFP.map(([a,b],i)=>ko('qf',i,r16w[a],r16w[b]));
+  const sfw=_SFP.map(([a,b],i)=>ko('sf',i,qfw[a],qfw[b]));
   const sfL=_SFP.map(([a,b],i)=>qfw[a]===sfw[i]?qfw[b]:qfw[a]);
-  const champion=_simKOMatch(sfw[0],sfw[1]);
-  const runnerUp=sfw[0]===champion?sfw[1]:sfw[0];
-  const third=_simKOMatch(sfL[0],sfL[1]);
-  const fourth=sfL[0]===third?sfL[1]:sfL[0];
+
+  const champion = (aKO.final||{})[0] || _simKOMatch(sfw[0],sfw[1]);
+  const runnerUp  = (aKO.final||{})[1] || (sfw[0]===champion?sfw[1]:sfw[0]);
+  const third     = (aKO.f3||{})[0]   || _simKOMatch(sfL[0],sfL[1]);
+  const fourth    = (aKO.f3||{})[1]   || (sfL[0]===third?sfL[1]:sfL[0]);
 
   return{
     simA,
