@@ -2448,6 +2448,140 @@ function pgMyScore(pid){
         <span style="font-size:.68rem;padding:2px 9px;border-radius:12px;background:rgba(136,170,255,.1);color:#88aaff;font-weight:600">🏆 KO: +${scoreKO(pred)}</span>
       </div>
     </div>
+    ${(()=>{
+      // ── LIGA STATS ──────────────────────────────────────────
+      if(!myLeagues.length) return "";
+
+      const lg=myLeagues[0];
+      const members=lg.memberIds.map(mid=>STATE.participants.find(x=>x.id===mid)).filter(Boolean);
+      const allPreds=members.map(m=>STATE.predictions[m.id]).filter(Boolean);
+      if(!allPreds.length) return "";
+
+      // Played matches
+      const played=MATCHES.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";});
+      const totalPred=played.length*allPreds.length||1;
+
+      // Aggregate: exact, correct, miss counts across all members & played matches
+      let totalExact=0,totalCorrect=0,totalMiss=0;
+      allPreds.forEach(pr=>{
+        played.forEach(m=>{
+          const pred2=(pr.groups||{})[m.id], act=(STATE.actuals||{})[m.id];
+          if(!pred2||pred2.h===""||!act) return;
+          if(+pred2.h===+act.h&&+pred2.a===+act.a) totalExact++;
+          else{
+            const pr2=+pred2.h>+pred2.a?'H':+pred2.h<+pred2.a?'A':'D';
+            const ar=+act.h>+act.a?'H':+act.h<+act.a?'A':'D';
+            if(pr2===ar) totalCorrect++; else totalMiss++;
+          }
+        });
+      });
+
+      // Champion picks
+      const champPicks={};
+      allPreds.forEach(pr=>{ const c=(pr.ko||{}).final?.[0]; if(c) champPicks[c]=(champPicks[c]||0)+1; });
+      const champRank=Object.entries(champPicks).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+      // Runner-up picks (auto-derive from bracket)
+      const runnerPicks={};
+      allPreds.forEach(pr=>{
+        const ko2=pr.ko||{};
+        const champ2=(ko2.final||{})[0];
+        const sf0=(ko2.sf||{})[0], sf1=(ko2.sf||{})[1];
+        let runner=null;
+        if(champ2&&sf0&&sf1) runner=champ2===sf0?sf1:champ2===sf1?sf0:null;
+        if(runner) runnerPicks[runner]=(runnerPicks[runner]||0)+1;
+      });
+      const runnerRank=Object.entries(runnerPicks).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+      // Actual champion (if known)
+      const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+      const actualChamp=aKO.final?.[0]||null;
+      const actualRunner=aKO.final?.[1]||null;
+
+      const pct=(n,d)=>d>0?Math.round(n/d*100):0;
+
+      return `
+      <div style="margin-top:10px">
+        <div style="font-size:.6rem;letter-spacing:2px;color:#667;font-weight:700;margin-bottom:8px">📊 ESTADÍSTICAS DE LA LIGA</div>
+
+        ${played.length>0?`
+        <!-- Group match stats -->
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px">
+          <div style="font-size:.65rem;color:#ffc800;font-weight:700;letter-spacing:.5px;margin-bottom:8px">⚽ PARTIDOS JUGADOS (${played.length} de ${MATCHES.length})</div>
+          <div style="display:flex;gap:0;text-align:center">
+            <div style="flex:1;border-right:1px solid rgba(255,255,255,.06);padding:.3rem 0">
+              <div style="font-size:1.5rem;font-weight:800;color:#00c853">${totalExact}</div>
+              <div style="font-size:.62rem;color:#4de0a0">🎯 Exactos</div>
+              <div style="font-size:.58rem;color:#445;margin-top:1px">${pct(totalExact,totalPred)}% del total</div>
+            </div>
+            <div style="flex:1;border-right:1px solid rgba(255,255,255,.06);padding:.3rem 0">
+              <div style="font-size:1.5rem;font-weight:800;color:#0080ff">${totalCorrect}</div>
+              <div style="font-size:.62rem;color:#88aaff">✅ Resultados</div>
+              <div style="font-size:.58rem;color:#445;margin-top:1px">${pct(totalCorrect,totalPred)}% del total</div>
+            </div>
+            <div style="flex:1;padding:.3rem 0">
+              <div style="font-size:1.5rem;font-weight:800;color:#445">${totalMiss}</div>
+              <div style="font-size:.62rem;color:#556">❌ Fallos</div>
+              <div style="font-size:.58rem;color:#445;margin-top:1px">${pct(totalMiss,totalPred)}% del total</div>
+            </div>
+          </div>
+          <div style="margin-top:8px;display:flex;border-radius:5px;overflow:hidden;height:6px;gap:1px">
+            <div style="background:#00c853;width:${pct(totalExact,totalPred)}%"></div>
+            <div style="background:#0080ff;width:${pct(totalCorrect,totalPred)}%"></div>
+            <div style="background:rgba(255,255,255,.12);flex:1"></div>
+          </div>
+          <div style="font-size:.6rem;color:#445;margin-top:4px;text-align:center">${allPreds.length} participantes × ${played.length} partidos = ${totalPred} predicciones totales</div>
+        </div>`:""}
+
+        <!-- Champion picks -->
+        ${champRank.length>0?`
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px">
+          <div style="font-size:.65rem;color:#ffc800;font-weight:700;letter-spacing:.5px;margin-bottom:8px">🏆 PICKS DE CAMPEÓN EN LA LIGA</div>
+          ${champRank.map(([team,count],i)=>{
+            const isCorrect=actualChamp&&team===actualChamp;
+            const isWrong=actualChamp&&team!==actualChamp;
+            return `<div style="display:flex;align-items:center;gap:.5rem;padding:5px 0;${i>0?'border-top:1px solid rgba(255,255,255,.04)':''}">
+              <span style="font-size:.95rem">${f(team)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.8rem;font-weight:600;color:${isCorrect?'#4de0a0':isWrong?'#ff8080':'#eee'}">${team}${isCorrect?' ✓':isWrong?' ✗':''}</div>
+                <div style="background:rgba(255,255,255,.08);border-radius:3px;height:4px;margin-top:3px;overflow:hidden">
+                  <div style="background:${isCorrect?'#00c853':'rgba(255,200,0,.5)'};width:${pct(count,allPreds.length)}%;height:100%"></div>
+                </div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:.85rem;font-weight:700;color:${isCorrect?'#4de0a0':'#889'}">${count}</div>
+                <div style="font-size:.6rem;color:#445">${pct(count,allPreds.length)}%</div>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>`:""}
+
+        <!-- Runner-up picks -->
+        ${runnerRank.length>0?`
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px">
+          <div style="font-size:.65rem;color:#b0b0b0;font-weight:700;letter-spacing:.5px;margin-bottom:8px">🥈 PICKS DE SUBCAMPEÓN EN LA LIGA</div>
+          ${runnerRank.map(([team,count],i)=>{
+            const isCorrect=actualRunner&&team===actualRunner;
+            const isWrong=actualRunner&&team!==actualRunner;
+            return `<div style="display:flex;align-items:center;gap:.5rem;padding:5px 0;${i>0?'border-top:1px solid rgba(255,255,255,.04)':''}">
+              <span style="font-size:.95rem">${f(team)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.8rem;font-weight:600;color:${isCorrect?'#4de0a0':isWrong?'#ff8080':'#eee'}">${team}${isCorrect?' ✓':isWrong?' ✗':''}</div>
+                <div style="background:rgba(255,255,255,.08);border-radius:3px;height:4px;margin-top:3px;overflow:hidden">
+                  <div style="background:${isCorrect?'#00c853':'rgba(180,180,180,.4)'};width:${pct(count,allPreds.length)}%;height:100%"></div>
+                </div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:.85rem;font-weight:700;color:${isCorrect?'#4de0a0':'#889'}">${count}</div>
+                <div style="font-size:.6rem;color:#445">${pct(count,allPreds.length)}%</div>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>`:""}
+
+        ${champRank.length===0&&played.length===0?`<div style="text-align:center;font-size:.75rem;color:#445;padding:.8rem 0">Las estadísticas aparecerán cuando empiece el torneo</div>`:""}
+      </div>`;
+    })()}
   `:""}
   ${tab==="predictions"?`
     <div class="grp-tabs" style="overflow-x:auto;white-space:nowrap">
