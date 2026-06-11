@@ -4513,12 +4513,36 @@ function generateLeaguePDF(lid){
   doc.text(members.length+" participante"+(members.length!==1?"s":"")+"  ·  Generado: "
     +new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"}),
     W/2,H*0.68,{align:"center"});
-  // Participant index
-  doc.setTextColor(180,190,210);doc.setFont("helvetica","normal");doc.setFontSize(7.5);
-  const colW=W/3, startY=H*0.74;
+  // Participant index — dynamic layout to fit all
+  const listStartY=H*0.74, listEndY=H-8, availH=listEndY-listStartY;
+  // Determine columns and font based on participant count
+  let numCols=3, listFontSize=7.5, rowH=8;
+  if(members.length>30){numCols=4;listFontSize=6;rowH=6.5;}
+  else if(members.length>18){numCols=4;listFontSize=6.5;rowH=7;}
+  const rowsPerPage=Math.floor(availH/rowH);
+  const perPage=numCols*rowsPerPage;
+
+  doc.setTextColor(180,190,210);doc.setFont("helvetica","normal");doc.setFontSize(listFontSize);
+  const colWL=W/numCols;
+
   members.forEach((p,i)=>{
-    const cx=(i%3)*colW+colW/2, cy=startY+Math.floor(i/3)*8;
-    doc.text((i+1)+". "+p.name,cx,cy,{align:"center",maxWidth:colW-8});
+    // If this participant goes on an overflow page
+    if(i>0 && i%perPage===0){
+      doc.addPage();
+      doc.setFillColor(10,20,50);doc.rect(0,0,W,H,"F");
+      doc.setFillColor(255,200,0);doc.rect(0,H*0.38,W,2,"F");
+      doc.setFillColor(255,200,0);doc.rect(0,H*0.62,W,2,"F");
+      doc.setTextColor(255,200,0);doc.setFont("helvetica","bold");doc.setFontSize(11);
+      doc.text(lg.name.toUpperCase()+" — PARTICIPANTES (cont.)",W/2,H*0.3,{align:"center"});
+      doc.setFillColor(0,0,0);doc.rect(0,H-6,W,6,"F");
+      doc.setTextColor(100,120,160);doc.setFont("helvetica","normal");doc.setFontSize(4.5);
+      doc.text("Quiniela FIFA World Cup 2026  ·  Documento de constancia  ·  "+lg.name,W/2,H-2,{align:"center"});
+      doc.setTextColor(180,190,210);doc.setFont("helvetica","normal");doc.setFontSize(listFontSize);
+    }
+    const pageIdx=i%perPage;
+    const cx=(pageIdx%numCols)*colWL+colWL/2;
+    const cy=listStartY+Math.floor(pageIdx/numCols)*rowH;
+    doc.text((i+1)+". "+p.name,cx,cy,{align:"center",maxWidth:colWL-6});
   });
   // Footer
   doc.setFillColor(0,0,0);doc.rect(0,H-6,W,6,"F");
