@@ -2483,7 +2483,7 @@ function pgMyScore(pid){
       // Champion picks
       const champPicks={};
       allPreds.forEach(pr=>{ const c=(pr.ko||{}).final?.[0]; if(c) champPicks[c]=(champPicks[c]||0)+1; });
-      const champRank=Object.entries(champPicks).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      const champRank=Object.entries(champPicks).sort((a,b)=>b[1]-a[1]);
 
       // Runner-up picks (auto-derive from bracket)
       const runnerPicks={};
@@ -2495,7 +2495,7 @@ function pgMyScore(pid){
         if(champ2&&sf0&&sf1) runner=champ2===sf0?sf1:champ2===sf1?sf0:null;
         if(runner) runnerPicks[runner]=(runnerPicks[runner]||0)+1;
       });
-      const runnerRank=Object.entries(runnerPicks).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      const runnerRank=Object.entries(runnerPicks).sort((a,b)=>b[1]-a[1]);
 
       // Actual champion (if known)
       const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
