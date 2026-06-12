@@ -2155,7 +2155,12 @@ function hoyTab(pid,pred){
   const now=_simDate?new Date(_simDate):new Date();
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const todayStr=months[now.getMonth()]+" "+now.getDate();
-  const todayMatches=MATCHES.filter(m=>m.date===todayStr);
+  const todayMatches=MATCHES.filter(m=>m.date===todayStr)
+    .sort((a,b)=>{
+      const ta=MATCH_UTC[a.id]?new Date(MATCH_UTC[a.id]).getTime():0;
+      const tb=MATCH_UTC[b.id]?new Date(MATCH_UTC[b.id]).getTime():0;
+      return ta-tb;
+    });
 
   if(todayMatches.length===0){
     const allDates=[...new Set(MATCHES.map(m=>m.date))];
