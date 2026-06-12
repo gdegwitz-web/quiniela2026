@@ -2115,72 +2115,9 @@ function pgPredict(pid){
     </button>`}
   </div>
 
-  <!-- Help modal -->
-  <div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;overflow-y:auto;padding:1rem" onclick="if(event.target===this)hideHelp()">
-    <div style="background:#1a2236;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:500px;margin:0 auto;overflow:hidden">
-      <div style="background:#0b1526;padding:.9rem 1rem;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-weight:700;font-size:1rem;color:#ffc800">❓ Cómo llenar tu quiniela</div>
-        <button onclick="hideHelp()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;width:auto;padding:0;line-height:1">×</button>
-      </div>
-      <div style="padding:.9rem 1rem;display:flex;flex-direction:column;gap:.75rem;font-size:.82rem;color:#ccc;line-height:1.5">
 
-        <div style="background:rgba(255,200,0,.07);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#ffc800;margin-bottom:.35rem">⚽ PASO 1 — GRUPOS</div>
-          Predice el marcador de los <strong style="color:#eee">72 partidos</strong> de fase de grupos.<br>
-          Selecciona cada grupo (A–L) e ingresa el resultado que crees que va a pasar.<br>
-          <span style="color:#4de0a0;font-size:.75rem">+5 pts marcador exacto · +3 pts resultado correcto (quién gana o empate)</span>
-        </div>
 
-        <div style="background:rgba(100,150,255,.07);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#88aaff;margin-bottom:.35rem">🏟️ PASO 2 — BRACKET</div>
-          Elige el ganador de cada partido en la fase eliminatoria.<br><br>
-          <strong style="color:#ffc800">🟡 Terceros lugares — automático:</strong><br>
-          Los 8 mejores terceros se calculan desde tus predicciones de grupos y se asignan automáticamente a cada llave según la tabla oficial de FIFA (Anexo C). ¡No necesitas hacer nada!<br><br>
-          <strong style="color:#eee">Luego:</strong> elige ganadores de 16vos → Octavos → Cuartos → Semis → Final y 3er lugar.<br><br>
-          <span style="color:#88aaff;font-size:.75rem">+8 Clasif. grupos · +10 De 16vos · +15 Octavos · +20 Cuartos · +25 Semis · +30 Final · +40 Campeón</span>
-        </div>
-
-        <div style="background:rgba(0,200,83,.07);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#4de0a0;margin-bottom:.35rem">🏆 PASO 3 — PODIO</div>
-          El podio (campeón, subcampeón, 3er lugar) se genera automáticamente desde tu bracket. Solo verifica que sea lo que quieres.
-        </div>
-
-        <div style="background:rgba(255,255,255,.04);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#eee;margin-bottom:.35rem">💾 GUARDAR Y ENVIAR</div>
-          Puedes guardar en cualquier momento y continuar después. <br>
-          Una vez que hayas completado <strong style="color:#eee">grupos + bracket</strong>, el botón verde <strong style="color:#00c853">FINALIZAR Y ENVIAR</strong> se activará.
-        </div>
-
-        <div style="background:rgba(255,200,0,.07);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#ffc800;margin-bottom:.35rem">🏅 LIGAS PRIVADAS</div>
-          Una vez enviada tu quiniela, puedes crear o unirte a una liga privada con amigos. Ve a <strong style="color:#eee">Mi Puntaje → Mis Ligas</strong>.
-        </div>
-
-        <div style="background:rgba(255,80,80,.06);border:1px solid rgba(255,80,80,.18);border-radius:9px;padding:.7rem .8rem">
-          <div style="font-weight:700;color:#ff9090;margin-bottom:.5rem">⚖️ DESEMPATE AL FINAL DEL TORNEO</div>
-          En caso de empate en el puntaje total, se aplican estos criterios en orden:<br><br>
-          <div style="display:flex;flex-direction:column;gap:.4rem">
-            <div style="display:flex;gap:.6rem;align-items:flex-start">
-              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">1</div>
-              <div><strong style="color:#eee">Más puntos en fase de grupos</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Quien haya acumulado más puntos solo en los 72 partidos de grupos gana el desempate.</span></div>
-            </div>
-            <div style="display:flex;gap:.6rem;align-items:flex-start">
-              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">2</div>
-              <div><strong style="color:#eee">Más marcadores exactos en grupos</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Quien haya predicho más resultados exactos (5 pts) en la fase de grupos.</span></div>
-            </div>
-            <div style="display:flex;gap:.6rem;align-items:flex-start">
-              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">3</div>
-              <div><strong style="color:#eee">Quiniela enviada primero</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Si persiste el empate, gana quien haya enviado su quiniela antes del cierre de registro.</span></div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-      <div style="padding:.7rem 1rem;border-top:1px solid rgba(255,255,255,.08)">
-        <button onclick="hideHelp()" class="btn-green" style="margin:0">Entendido ✓</button>
-      </div>
-    </div>
-  </div>`;
+  ${scoringHelpHTML()}`;
 }
 
 function hoyTab(pid,pred){
@@ -2377,6 +2314,7 @@ function hoyTab(pid,pred){
       <div style="font-size:.75rem;font-weight:700;letter-spacing:1px;color:#ffc800">📅 ${todayStr.toUpperCase()}</div>
       <div style="font-size:.68rem;color:#889">${todayMatches.length} partido${todayMatches.length!==1?"s":""} hoy · ${playedToday} jugado${playedToday!==1?"s":""}</div>
     </div>
+    <button onclick="showHelp()" style="background:rgba(255,200,0,.1);border:1px solid rgba(255,200,0,.25);border-radius:8px;color:#ffc800;font-size:.72rem;font-weight:700;padding:.3rem .7rem;cursor:pointer;flex-shrink:0">❓ Puntuación</button>
   </div>
   ${!hasLeague?`<div style="font-size:.7rem;color:#667;margin-bottom:.5rem;text-align:center;font-style:italic">Únete a una liga para ver el consenso de los demás participantes</div>`:""}
   ${matchRows.join("")}`;
@@ -2744,7 +2682,8 @@ function pgMyScore(pid){
         Calculando probabilidades…
       </div>
     </div>`;
-  })():""}`;
+  })():""}
+  ${scoringHelpHTML()}`;
 }
 
 // ── LEAGUES ──────────────────────────────────────────
@@ -3540,6 +3479,59 @@ function bindEvents(){
 // ── ACTIONS ───────────────────────────────────────────
 function showHelp(){const m=document.getElementById("help-modal");if(m)m.style.display="block";}
 function hideHelp(){const m=document.getElementById("help-modal");if(m)m.style.display="none";}
+
+function scoringHelpHTML(){
+  return `<div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;overflow-y:auto;padding:1rem" onclick="if(event.target===this)hideHelp()">
+    <div style="background:#1a2236;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:500px;margin:0 auto;overflow:hidden">
+      <div style="background:#0b1526;padding:.9rem 1rem;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:700;font-size:1rem;color:#ffc800">❓ Puntuación y desempates</div>
+        <button onclick="hideHelp()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;width:auto;padding:0;line-height:1">×</button>
+      </div>
+      <div style="padding:.9rem 1rem;display:flex;flex-direction:column;gap:.75rem;font-size:.82rem;color:#ccc;line-height:1.5">
+        <div style="background:rgba(255,200,0,.07);border-radius:9px;padding:.7rem .8rem">
+          <div style="font-weight:700;color:#ffc800;margin-bottom:.35rem">⚽ FASE DE GRUPOS</div>
+          <span style="color:#4de0a0">+5 pts</span> marcador exacto &nbsp;·&nbsp; <span style="color:#88aaff">+3 pts</span> resultado correcto (quién gana o empate)
+        </div>
+        <div style="background:rgba(100,150,255,.07);border-radius:9px;padding:.7rem .8rem">
+          <div style="font-weight:700;color:#88aaff;margin-bottom:.5rem">🏟️ FASE ELIMINATORIA</div>
+          <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.78rem">
+            <div style="display:flex;justify-content:space-between"><span>Clasificados de grupos (32 equipos)</span><span style="color:#ffc800;font-weight:700">+8 c/u</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Ganador de 16vos → Octavos</span><span style="color:#ffc800;font-weight:700">+10 c/u</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Ganador de Octavos → Cuartos</span><span style="color:#ffc800;font-weight:700">+15 c/u</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Ganador de Cuartos → Semis</span><span style="color:#ffc800;font-weight:700">+20 c/u</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Clasificado a la Final (vía semis)</span><span style="color:#ffc800;font-weight:700">+30 c/u</span></div>
+            <div style="height:1px;background:rgba(255,255,255,.08);margin:.2rem 0"></div>
+            <div style="display:flex;justify-content:space-between"><span>🏆 Campeón</span><span style="color:#ffc800;font-weight:700">+40</span></div>
+            <div style="display:flex;justify-content:space-between"><span>🥈 Subcampeón</span><span style="color:#ffc800;font-weight:700">+30</span></div>
+            <div style="display:flex;justify-content:space-between"><span>🥉 3er Lugar</span><span style="color:#ffc800;font-weight:700">+20</span></div>
+            <div style="display:flex;justify-content:space-between"><span>4to Lugar</span><span style="color:#ffc800;font-weight:700">+10</span></div>
+          </div>
+          <div style="margin-top:.5rem;font-size:.72rem;color:#667">Máximo posible: 1.196 pts</div>
+        </div>
+        <div style="background:rgba(255,80,80,.06);border:1px solid rgba(255,80,80,.18);border-radius:9px;padding:.7rem .8rem">
+          <div style="font-weight:700;color:#ff9090;margin-bottom:.5rem">⚖️ DESEMPATE AL FINAL</div>
+          <div style="display:flex;flex-direction:column;gap:.4rem">
+            <div style="display:flex;gap:.6rem;align-items:flex-start">
+              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">1</div>
+              <div><strong style="color:#eee">Más puntos en grupos</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Quien haya acumulado más puntos solo en los 72 partidos de grupos.</span></div>
+            </div>
+            <div style="display:flex;gap:.6rem;align-items:flex-start">
+              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">2</div>
+              <div><strong style="color:#eee">Más marcadores exactos en grupos</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Quien haya predicho más resultados exactos (+5) en grupos.</span></div>
+            </div>
+            <div style="display:flex;gap:.6rem;align-items:flex-start">
+              <div style="background:rgba(255,200,0,.15);color:#ffc800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:.1rem">3</div>
+              <div><strong style="color:#eee">Quiniela enviada primero</strong><br><span style="font-size:.72rem;color:rgba(255,255,255,.5)">Si persiste el empate, gana quien envió su quiniela antes.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:.7rem 1rem;border-top:1px solid rgba(255,255,255,.08)">
+        <button onclick="hideHelp()" class="btn-green" style="margin:0">Entendido ✓</button>
+      </div>
+    </div>
+  </div>`;
+}
 
 function saveForLater(pid){
   go("landing");
@@ -4497,15 +4489,15 @@ function buildParticipantPages(doc, pid, isFirstPage){
   const rightR32order=[10,11,8,9,13,15,12,14];
   const leftRounds=[
     {rid:"r32",ms:leftR32order.map(i=>B.r32[i]),ws:B.r32w,n:8,c:0},
-    {rid:"r16",ms:B.r16.slice(0,4),ws:B.r16w,n:4,c:1},
-    {rid:"qf",ms:B.qf.slice(0,2),ws:B.qfw,n:2,c:2},
-    {rid:"sf",ms:B.sf.slice(0,1),ws:B.sfw,n:1,c:3},
+    {rid:"r16",ms:[B.r16[0],B.r16[1],B.r16[4],B.r16[5]],ws:B.r16w,n:4,c:1},
+    {rid:"qf", ms:[B.qf[0],B.qf[2]],ws:B.qfw,n:2,c:2},
+    {rid:"sf", ms:B.sf.slice(0,1),ws:B.sfw,n:1,c:3},
   ];
   const rightRounds=[
     {rid:"r32",ms:rightR32order.map(i=>B.r32[i]),ws:B.r32w,n:8,c:8},
-    {rid:"r16",ms:B.r16.slice(4,8),ws:B.r16w,n:4,c:7},
-    {rid:"qf",ms:B.qf.slice(2,4),ws:B.qfw,n:2,c:6},
-    {rid:"sf",ms:B.sf.slice(1,2),ws:B.sfw,n:1,c:5},
+    {rid:"r16",ms:[B.r16[2],B.r16[3],B.r16[6],B.r16[7]],ws:B.r16w,n:4,c:7},
+    {rid:"qf", ms:[B.qf[1],B.qf[3]],ws:B.qfw,n:2,c:6},
+    {rid:"sf", ms:B.sf.slice(1,2),ws:B.sfw,n:1,c:5},
   ];
 
   [...leftRounds,...rightRounds].forEach(({rid,ms,ws,n,c})=>{
