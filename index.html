@@ -749,6 +749,35 @@ function makeMatches(){
 }
 const MATCHES=makeMatches();
 
+// Official kickoff times in UTC (EDT = UTC-4)
+const MATCH_UTC={
+  1:"2026-06-11T19:00Z",2:"2026-06-12T02:00Z",
+  3:"2026-06-13T01:00Z",4:"2026-06-12T19:00Z",
+  5:"2026-06-13T19:00Z",6:"2026-06-13T22:00Z",7:"2026-06-14T01:00Z",8:"2026-06-13T04:00Z",
+  9:"2026-06-14T17:00Z",10:"2026-06-14T23:00Z",11:"2026-06-14T20:00Z",12:"2026-06-15T02:00Z",
+  13:"2026-06-15T19:00Z",14:"2026-06-16T01:00Z",15:"2026-06-15T16:00Z",16:"2026-06-15T22:00Z",
+  17:"2026-06-16T19:00Z",18:"2026-06-17T01:00Z",19:"2026-06-16T22:00Z",20:"2026-06-16T16:00Z",
+  21:"2026-06-17T16:00Z",22:"2026-06-17T22:00Z",23:"2026-06-17T19:00Z",24:"2026-06-18T01:00Z",
+  25:"2026-06-18T16:00Z",26:"2026-06-19T01:00Z",27:"2026-06-18T19:00Z",28:"2026-06-18T22:00Z",
+  29:"2026-06-19T22:00Z",30:"2026-06-20T01:00Z",31:"2026-06-19T19:00Z",32:"2026-06-19T16:00Z",
+  33:"2026-06-20T20:00Z",34:"2026-06-21T00:00Z",35:"2026-06-20T17:00Z",36:"2026-06-20T23:00Z",
+  37:"2026-06-21T19:00Z",38:"2026-06-22T01:00Z",39:"2026-06-21T16:00Z",40:"2026-06-21T22:00Z",
+  41:"2026-06-22T19:00Z",42:"2026-06-23T01:00Z",43:"2026-06-22T22:00Z",44:"2026-06-22T16:00Z",
+  45:"2026-06-23T16:00Z",46:"2026-06-23T22:00Z",47:"2026-06-23T19:00Z",48:"2026-06-24T01:00Z",
+  49:"2026-06-25T01:00Z",50:"2026-06-25T01:00Z",51:"2026-06-24T19:00Z",52:"2026-06-24T19:00Z",
+  53:"2026-06-25T02:00Z",54:"2026-06-25T02:00Z",55:"2026-06-25T22:00Z",56:"2026-06-25T22:00Z",
+  57:"2026-06-25T20:00Z",58:"2026-06-25T20:00Z",59:"2026-06-26T01:00Z",60:"2026-06-26T01:00Z",
+  61:"2026-06-26T23:00Z",62:"2026-06-26T23:00Z",63:"2026-06-26T20:00Z",64:"2026-06-26T20:00Z",
+  65:"2026-06-27T01:00Z",66:"2026-06-27T01:00Z",67:"2026-06-27T22:00Z",68:"2026-06-27T22:00Z",
+  69:"2026-06-27T19:00Z",70:"2026-06-27T19:00Z",71:"2026-06-28T01:00Z",72:"2026-06-28T01:00Z",
+};
+function matchTime(mid){
+  const iso=MATCH_UTC[mid];if(!iso)return"";
+  try{return new Date(iso).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});}
+  catch(e){return"";}
+}
+
+
 // Password hashing — uses Web Crypto API (SHA-256 + salt) when available,
 // falls back to djb2 for older browsers. Async but handles gracefully.
 function hashPwd(s){
@@ -2243,6 +2272,7 @@ function hoyTab(pid,pred){
       <!-- Group + status header -->
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
         <span style="font-size:.65rem;font-weight:700;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.1rem .5rem">GRUPO ${m.g}</span>
+        ${matchTime(m.id)?`<span style="font-size:.68rem;font-weight:600;color:#eee">⏱ ${matchTime(m.id)}</span>`:''}
         <span style="font-size:.65rem;color:#556;margin-left:auto">${m.date||""}</span>
         ${ac&&ac.h!==""?`<span style="font-size:.65rem;font-weight:700;color:#4de0a0">✓ FT</span>`:
           `<span style="font-size:.65rem;color:#667">⏳ Pendiente</span>`}
@@ -2497,170 +2527,234 @@ function pgMyScore(pid){
     </div>${lgStatsHTML}`;
   })():""}
 
-  ${tab==="predictions"?`
-    <div class="grp-tabs" style="overflow-x:auto;white-space:nowrap">
-      ${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${g}'})">${g}</button>`).join("")}
-      <button class="gtab${grp==="KO"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'KO'})" style="color:#ffc800;font-weight:700">🏆 KO</button>
-    </div>
+  ${tab==="predictions"?((()=>{
+    const showLiga=!!ROUTE.showLiga;
+    const ligaId=ROUTE.ligaId||myLeagues[0]?.id||"";
+    const ligaParam=showLiga?(",showLiga:true,ligaId:'"+ligaId+"'"):"";
+    const selLg=myLeagues.find(l=>l.id===ligaId)||myLeagues[0];
+    const lgMembers=selLg?selLg.memberIds.map(mid=>STATE.participants.find(x=>x.id===mid)).filter(p=>p&&!p.hidden):[];
 
-    ${grp==="KO"?`
-    ${(()=>{
-      const ko=pred.ko||{};
+    // Two-button toggle: Mi predicción / Liga
+    const toggleHtml=myLeagues.length?`<div style="display:flex;background:rgba(255,255,255,.05);border-radius:8px;padding:2px;gap:2px;flex-shrink:0">
+      <button onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}',showLiga:false})"
+        style="padding:4px 9px;border:none;border-radius:6px;background:${!showLiga?'#ffc800':'none'};color:${!showLiga?'#000':'#889'};font-size:.65rem;font-weight:${!showLiga?700:400};cursor:pointer">
+        Mis picks
+      </button>
+      <button onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}',showLiga:true,ligaId:'${ligaId}'})"
+        style="padding:4px 9px;border:none;border-radius:6px;background:${showLiga?'#ffc800':'none'};color:${showLiga?'#000':'#889'};font-size:.65rem;font-weight:${showLiga?700:400};cursor:pointer">
+        👥 Liga
+      </button>
+    </div>`:"";
+
+    // Multi-league selector (only in liga mode)
+    let lgSelector="";
+    if(showLiga&&myLeagues.length>1){
+      lgSelector="<div style='display:flex;gap:4px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none'>"+
+        myLeagues.map(l=>{
+          const on=l.id===ligaId;
+          return "<button onclick=\"go('myscore',{pid:'"+pid+"',subtab:'predictions',grp:'"+grp+"',showLiga:true,ligaId:'"+l.id+"'})\" style='flex-shrink:0;padding:4px 9px;border-radius:6px;border:1px solid "+(on?"rgba(255,200,0,.4)":"rgba(255,255,255,.1)")+";background:"+(on?"rgba(255,200,0,.12)":"rgba(255,255,255,.04)")+";color:"+(on?"#ffc800":"#889")+";font-size:.65rem;font-weight:"+(on?700:400)+";cursor:pointer;white-space:nowrap'>"+l.name+"</button>";
+        }).join("")+"</div>";
+    }
+
+    // ── KO LIGA VIEW: only Semis + Final 4 ─────────────
+    let koLigaHtml="";
+    let grpLigaHtml="";
+    if(showLiga&&grp==="KO"){
       const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
-      const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
-      const kPts=scoreKO(pred);
-      const hasActuals=Object.keys(aKO).some(k=>Object.keys(aKO[k]||{}).length>0);
+      const finAc=aKO.final||{},f3Ac=aKO.f3||{};
+      // Include all league members, fall back to at least current user
+      const koMembers=lgMembers.length?lgMembers:[STATE.participants.find(x=>x.id===pid)].filter(Boolean);
 
-      // Build bracket to get match context (which teams play each other)
-      let B=null;
-      try{ B=buildBracket(pred.groups||{},ko); }catch(e){}
+      const cell=(pick,actual,pts)=>{
+        if(!pick) return "<span style='color:#334'>—</span>";
+        const isC=actual&&pick===actual,isW=actual&&pick!==actual;
+        return "<div style='text-align:center'>"
+          +"<div style='font-size:.8rem'>"+f(pick)+"</div>"
+          +"<div style='font-size:.6rem;color:"+(isC?"#00c853":isW?"#ff6060":"#aaa")+";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px'>"+pick+"</div>"
+          +(isC?"<div style='font-size:.52rem;color:#00c853'>+"+pts+"✓</div>":"")
+        +"</div>";
+      };
 
-      // Score summary bar
-      const gAdvPts2=scoreGroupAdvancement(pred);
-      let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+gAdvPts2+kPts} pts</div></div>
-        <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
-        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">GRUPOS</div><div style="font-size:.9rem;font-weight:700;color:#4de0a0">+${gPts}</div></div>
-        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">CLASIF.</div><div style="font-size:.9rem;font-weight:700;color:#ffd580">+${gAdvPts2}</div></div>
-        <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
-      </div>`;
+      if(koMembers.length){
+        koLigaHtml=lgSelector+"<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;margin-bottom:8px'>"
+          +"<div style='background:rgba(255,200,0,.08);padding:6px 10px;font-size:.62rem;color:#ffc800;font-weight:700;letter-spacing:1px'>🏆 PICKS FINALES DE LA LIGA <span style='font-weight:400;color:#667'>("+selLg.name+")</span></div>"
+          +"<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;min-width:280px'>"
+          +"<thead><tr style='border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)'>"
+          +"<th style='padding:5px 8px;font-size:.58rem;color:#667;font-weight:400;text-align:left;min-width:80px'>JUGADOR</th>"
+          +"<th style='padding:5px 4px;text-align:center;font-size:.6rem;color:#ffc800;min-width:65px'>🏆 Campeón<br><span style='color:#445;font-size:.52rem'>(+40)</span>"+(finAc[0]?"<br><span style='color:#ffc800;font-weight:700;font-size:.6rem'>"+finAc[0]+"</span>":"")+"</th>"
+          +"<th style='padding:5px 4px;text-align:center;font-size:.6rem;color:#b0b0b0;min-width:65px'>🥈 Sub<br><span style='color:#445;font-size:.52rem'>(+30)</span>"+(finAc[1]?"<br><span style='color:#ccc;font-weight:700;font-size:.6rem'>"+finAc[1]+"</span>":"")+"</th>"
+          +"<th style='padding:5px 4px;text-align:center;font-size:.6rem;color:#cd7f32;min-width:65px'>🥉 3ro<br><span style='color:#445;font-size:.52rem'>(+20)</span>"+(f3Ac[0]?"<br><span style='color:#cd7f32;font-weight:700;font-size:.6rem'>"+f3Ac[0]+"</span>":"")+"</th>"
+          +"</tr></thead><tbody>"
+          +koMembers.map(m=>{
+            const ko2=(STATE.predictions[m.id]||{}).ko||{};
+            const sf0=(ko2.sf||{})[0],sf1=(ko2.sf||{})[1];
+            const champ=(ko2.final||{})[0];
+            const runner=(ko2.final||{})[1]||(champ&&sf0&&sf1?(champ===sf0?sf1:champ===sf1?sf0:null):null);
+            const third=(ko2.f3||{})[0];
+            const isMe=m.id===pid;
+            return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"'>"
+              +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":"#eee")+";white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis'>"+m.name+(isMe?" ←":"")+"</td>"
+              +"<td style='padding:4px'>"+cell(champ,finAc[0],40)+"</td>"
+              +"<td style='padding:4px'>"+cell(runner,finAc[1],30)+"</td>"
+              +"<td style='padding:4px'>"+cell(third,f3Ac[0],20)+"</td>"
+            +"</tr>";
+          }).join("")
+          +"</tbody></table></div></div>";
+      }
+    }
 
-      // Rounds config
-      const rounds=[
-        {key:"r32", label:"Ronda de 32",     pts:10, matches:B?B.r32:[]},
-        {key:"r16", label:"Octavos de Final", pts:15, matches:B?B.r16:[]},
-        {key:"qf",  label:"Cuartos de Final", pts:20, matches:B?B.qf:[]},
-        {key:"sf",  label:"Clasificado a Final", pts:30, matches:B?B.sf:[]},
-      ];
-
-      rounds.forEach(r=>{
-        const pick=ko[r.key]||{};
-        const actual=aKO[r.key]||{};
-        // Only show rounds where user made picks OR actuals exist
-        const picksExist=Object.keys(pick).length>0;
-        const actualsExist=Object.keys(actual).length>0;
-        if(!picksExist&&!actualsExist) return;
-
-        // Build rows from user's picks
-        const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
-        if(!pickEntries.length) return;
-
-        let correct=0;
-        const rows=pickEntries.map(([idx,pTeam])=>{
-          const aTeam=actual[String(idx)]||null;
-          const ok=aTeam&&pTeam===aTeam;
-          const unknown=!aTeam;
-          if(ok) correct++;
-          return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem .4rem;border-radius:7px;background:rgba(255,255,255,.03);margin-bottom:.18rem">
-            <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.78rem;color:#eee;font-weight:600">${f(pTeam)} ${pTeam}</div>
-              ${aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Pasó: ${f(aTeam)} ${aTeam}</div>`:""}
-            </div>
-            <span style="font-size:.82rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"};flex-shrink:0">${unknown?"?":ok?"+"+r.pts:"0"}</span>
-          </div>`;
-        }).join("");
-
-        const total=actualsExist?Object.keys(actual).length:pickEntries.length;
-        html+=`<div style="margin-bottom:.7rem">
-          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">
-            <span style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px">${r.label.toUpperCase()}</span>
-            <span style="font-size:.62rem;background:rgba(255,200,0,.1);color:#ffc800;border-radius:4px;padding:.05rem .3rem">+${r.pts} c/u</span>
-            ${actualsExist?`<span style="font-size:.62rem;color:#667;margin-left:auto">${correct}/${total} ✓ · +${correct*r.pts} pts</span>`:`<span style="font-size:.62rem;color:#556;margin-left:auto">${pickEntries.length} picks</span>`}
-          </div>
-          ${rows}
+    // ── INDIVIDUAL PREDICTIONS VIEW ────────────────────
+    let indivHtml="";
+    if(!showLiga){
+      if(grp==="KO"){
+        // KO bracket view (read-only)
+        const ko=pred.ko||{};
+        const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+        const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
+        const kPts=scoreKO(pred);
+        const gAdvPts2=scoreGroupAdvancement(pred);
+        let B=null;try{B=buildBracket(pred.groups||{},ko);}catch(e){}
+        const rounds=[
+          {key:"r32",label:"16VOS → Octavos",pts:10,matches:B?B.r32:[]},
+          {key:"r16",label:"Octavos → Cuartos",pts:15,matches:B?B.r16:[]},
+          {key:"qf", label:"Cuartos → Semis",pts:20,matches:B?B.qf:[]},
+          {key:"sf", label:"Semis → Final",pts:30,matches:B?B.sf:[]},
+        ];
+        let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+          <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+gAdvPts2+kPts} pts</div></div>
+          <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
+          <div><div style="font-size:.6rem;color:#889">GRUPOS</div><div style="font-size:.9rem;font-weight:700;color:#4de0a0">+${gPts}</div></div>
+          <div><div style="font-size:.6rem;color:#889">CLASIF.</div><div style="font-size:.9rem;font-weight:700;color:#ffd580">+${gAdvPts2}</div></div>
+          <div><div style="font-size:.6rem;color:#889">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
         </div>`;
-      });
-
-      // Podio (Final + 3rd)
-      const actualFinalistList=[aKO.final&&aKO.final[0],aKO.final&&aKO.final[1]].filter(Boolean);
-      // Podio — derive runner-up and 4th place from bracket if not explicitly stored
-      const pSF=ko.sf||{};
-      const sf0=pSF[0]||null, sf1=pSF[1]||null;
-      const champ=( ko.final||{})[0]||null;
-      // Runner-up = the finalist who is NOT the champion
-      const runnerUp=(ko.final||{})[1]||
-        (champ&&sf0&&sf1 ? (champ===sf0?sf1:champ===sf1?sf0:null) : null);
-      // 3rd place pick
-      const third=(ko.f3||{})[0]||null;
-      // 4th place = loser of f3 match (the other SF loser who is NOT 3rd place)
-      let fourth=null;
-      try{
-        const B4=buildBracket(pred.groups||{},ko);
-        if(B4&&B4.f3&&third){fourth=B4.f3.h===third?B4.f3.a:B4.f3.h;}
-      }catch(e){}
-
-      const podioItems=[
-        {label:"🏆 Campeón",   pts:40, col:"#ffc800", pTeam:champ,    aTeam:(aKO.final||[])[0]||null},
-        {label:"🥈 Subcampeón", pts:30, col:"#aaa",   pTeam:runnerUp, aTeam:(aKO.final||[])[1]||null},
-        {label:"🥉 3er Lugar",  pts:20, col:"#cd7f32", pTeam:third,   aTeam:(aKO.f3||[])[0]||null},
-        {label:"4to Lugar",     pts:10, col:"#888",    pTeam:fourth,  aTeam:(aKO.f3||[])[1]||null},
-      ].filter(x=>x.pTeam);
-
-      if(podioItems.length){
-        html+=`<div style="margin-bottom:.7rem">
-          <div style="font-size:.68rem;font-weight:700;color:#ffc800;letter-spacing:.5px;margin-bottom:.3rem">PODIO</div>`;
-        podioItems.forEach(x=>{
-          const ok=x.aTeam&&x.pTeam===x.aTeam;
-          const unknown=!x.aTeam;
-          html+=`<div style="display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);margin-bottom:.25rem">
-            <span style="font-size:1rem;flex-shrink:0">${unknown?"⏳":ok?"✅":"❌"}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.65rem;color:${x.col};font-weight:700;margin-bottom:.1rem">${x.label}</div>
-              <div style="font-size:.78rem;color:#eee">${f(x.pTeam)} ${x.pTeam}</div>
-              ${x.aTeam&&!ok?`<div style="font-size:.65rem;color:#ff8080">Real: ${f(x.aTeam)} ${x.aTeam}</div>`:""}
-            </div>
-            <span style="font-size:.85rem;font-weight:700;color:${unknown?"#667":ok?"#4de0a0":"#445"}">
-              ${unknown?"?":ok?"+"+x.pts:"0"}
-            </span>
-          </div>`;
+        rounds.forEach(r=>{
+          const pick=ko[r.key]||{};const actual=aKO[r.key]||{};
+          const picksExist=Object.keys(pick).length>0;const actualsExist=Object.keys(actual).length>0;
+          if(!picksExist&&!actualsExist) return;
+          const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
+          html+=`<div style="margin-bottom:.8rem"><div style="font-size:.62rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:.35rem">${r.label} <span style="color:#667">+${r.pts} c/u</span></div>`;
+          html+=`<div style="display:flex;flex-wrap:wrap;gap:.3rem">`;
+          pickEntries.forEach(([idx,team])=>{
+            if(!team) return;
+            const isCorrect=actual[idx]&&team===actual[idx];const isWrong=actual[idx]&&team!==actual[idx];
+            html+=`<div style="background:${isCorrect?'rgba(0,200,83,.12)':isWrong?'rgba(255,80,80,.08)':'rgba(255,255,255,.05)'};border:1px solid ${isCorrect?'rgba(0,200,83,.3)':isWrong?'rgba(255,80,80,.2)':'rgba(255,255,255,.1)'};border-radius:6px;padding:3px 8px;font-size:.72rem;color:${isCorrect?'#4de0a0':isWrong?'#ff8080':'#eee'}">${f(team)} ${team}${isCorrect?' ✓':isWrong?' ✗':''}</div>`;
+          });
+          html+=`</div></div>`;
         });
-        html+=`</div>`;
-      }
-
-      if(!Object.keys(ko).some(k=>ko[k]&&Object.keys(ko[k]).length>0)&&!podioItems.length){
-        html+=`<div style="text-align:center;padding:1.5rem .8rem;color:#889;font-size:.82rem">
-          <div style="font-size:2rem;margin-bottom:.5rem">📋</div>
-          Aún no has llenado el bracket de la fase final.
-        </div>`;
-      }
-
-      return html;
-    })()}
-    `:`
-    <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
-    ${MATCHES.filter(m=>m.g===grp).map(m=>{
-      const pr=pred.groups?.[m.id],ac=(STATE.actuals||{})[m.id];
-      let badge="";
-      if(pr&&ac&&pr.h!==""&&pr.a!==""&&ac.h!==""&&ac.a!==""){
-        const ph=parseInt(pr.h),pa=parseInt(pr.a),ah=parseInt(ac.h),aa=parseInt(ac.a);
-        if(ph===ah&&pa===aa)badge=`<span style="background:#00c853;color:#000;border-radius:4px;padding:0 4px;font-size:.6rem;font-weight:700">+5</span>`;
-        else{const pw=ph>pa?"h":pa>ph?"a":"d",aw=ah>aa?"h":aa>ah?"a":"d";if(pw===aw)badge=`<span style="background:#0080ff;color:#fff;border-radius:4px;padding:0 4px;font-size:.6rem;font-weight:700">+3</span>`;}
-      }
-      return `<div class="match"><div class="tn">${f(m.h)} ${trunc(m.h,10)}</div>
-        <div style="text-align:center;font-size:.78rem">
-          <div>${pr?.h??"-"}:${pr?.a??"-"}</div>
-          <div style="font-size:.55rem;color:#444">vs</div>
-          <div style="color:#667">${ac?.h??"-"}:${ac?.a??"-"}</div>${badge}
-        </div>
-        <div class="tn r">${trunc(m.a,10)} ${f(m.a)}</div>
-      </div>`;}).join("")}
-    ${(()=>{
-      // Show actual standings if admin has entered results for this group,
-      // otherwise show predicted standings based on user's own picks
-      const grpMatches=MATCHES.filter(m=>m.g===grp);
-      const hasActuals=grpMatches.some(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";});
-      if(hasActuals){
-        return `<div style="font-size:.58rem;color:#4de0a0;text-align:right;margin-bottom:2px">Clasificación real ↓</div>`
-          + stTable(calcStandings(grp,STATE.actuals||{}));
+        // Podio
+        const champ=(ko.final||{})[0];const sf0=(ko.sf||{})[0],sf1=(ko.sf||{})[1];
+        const runner=(ko.final||{})[1]||(champ&&sf0&&sf1?(champ===sf0?sf1:champ===sf1?sf0:null):null);
+        const third=(ko.f3||{})[0];
+        if(champ||runner||third){
+          html+=`<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.15);border-radius:10px;padding:.6rem .8rem;margin-bottom:.5rem">
+            <div style="font-size:.62rem;letter-spacing:1.5px;color:#ffc800;font-weight:700;margin-bottom:.5rem">🏆 TU PODIO</div>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+              ${champ?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#ffc800;margin-bottom:2px">Campeón</div><div style="font-size:.85rem">${f(champ)}</div><div style="font-size:.7rem;color:#eee">${champ}</div></div>`:""}
+              ${runner?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#b0b0b0;margin-bottom:2px">Subcampeón</div><div style="font-size:.85rem">${f(runner)}</div><div style="font-size:.7rem;color:#eee">${runner}</div></div>`:""}
+              ${third?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#cd7f32;margin-bottom:2px">3er Lugar</div><div style="font-size:.85rem">${f(third)}</div><div style="font-size:.7rem;color:#eee">${third}</div></div>`:""}
+            </div>
+          </div>`;
+        }
+        indivHtml=html;
       } else {
-        return `<div style="font-size:.58rem;color:#ffc80088;text-align:right;margin-bottom:2px">Según tus predicciones ↓</div>`
-          + stTable(calcStandings(grp,pred.groups||{}));
+        // Group view: matches with user predictions + standings
+        const grpMs=MATCHES.filter(m=>m.g===grp);
+        const actuals2=STATE.actuals||{};
+        indivHtml=grpMs.map(m=>{
+          const pr=(pred.groups||{})[m.id];const ac=actuals2[m.id];
+          const done=ac&&ac.h!=="";
+          let badge="";
+          if(done&&pr&&pr.h!==""){
+            if(+pr.h===+ac.h&&+pr.a===+ac.a) badge=`<span style="background:#00c853;color:#000;font-size:.6rem;font-weight:700;border-radius:4px;padding:1px 6px">+5</span>`;
+            else{const r1=+pr.h>+pr.a?"H":+pr.h<+pr.a?"A":"D",r2=+ac.h>+ac.a?"H":+ac.h<+ac.a?"A":"D";
+              badge=r1===r2?`<span style="background:#0080ff;color:#fff;font-size:.6rem;font-weight:700;border-radius:4px;padding:1px 6px">+3</span>`:`<span style="background:rgba(255,255,255,.1);color:#556;font-size:.6rem;border-radius:4px;padding:1px 6px">0</span>`;}
+          }
+          return `<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,${done?'.12':'.06'});border-radius:9px;padding:.55rem .7rem;margin-bottom:.35rem">
+            <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.5rem">
+              <div style="font-size:.82rem;font-weight:600">${f(m.h)} ${m.h}</div>
+              <div style="text-align:center">
+                ${done?`<div style="font-size:1rem;font-weight:700;color:#eee">${ac.h} : ${ac.a}</div><div style="font-size:.55rem;color:#667">resultado</div>`:`<div style="font-size:.72rem;color:#556">vs</div>`}
+              </div>
+              <div style="font-size:.82rem;font-weight:600;text-align:right">${m.a} ${f(m.a)}</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.35rem;padding:.3rem .5rem;background:rgba(255,200,0,.05);border-radius:6px">
+              <div style="font-size:.7rem;color:#889">Mi predicción: <strong style="color:${pr&&pr.h!==''?'#ffc800':'#445'}">${pr&&pr.h!==''?pr.h+' - '+pr.a:'—'}</strong></div>
+              <div>${badge}</div>
+            </div>
+          </div>`;
+        }).join("")+`<div style="margin-top:.5rem;font-size:.62rem;letter-spacing:1px;color:#667;font-weight:700">CLASIFICACIÓN GRUPO ${grp}</div>`+
+        (()=>{
+          const std=calcStandings(grp,actuals2);
+          const useReal=Object.values(actuals2).some(a=>MATCHES.find(m=>m.g===grp&&m.id===Object.keys(actuals2).find(k=>k==m.id))&&a.h!=="");
+          const rows=std&&std.length?std:(()=>{const s2=calcStandings(grp,pred.groups||{});return s2||[];})();
+          if(!rows.length) return "";
+          return `<table style="width:100%;border-collapse:collapse;margin-top:.4rem;font-size:.7rem">
+            <thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">
+              <th style="padding:3px 6px;font-weight:600;color:#667;text-align:left">Equipo</th>
+              <th style="padding:3px 4px;color:#667;font-weight:600;text-align:center">PJ</th>
+              <th style="padding:3px 4px;color:#667;font-weight:600;text-align:center">PG</th>
+              <th style="padding:3px 4px;color:#667;font-weight:600;text-align:center">PE</th>
+              <th style="padding:3px 4px;color:#667;font-weight:600;text-align:center">PP</th>
+              <th style="padding:3px 4px;color:#667;font-weight:600;text-align:center">DG</th>
+              <th style="padding:3px 4px;color:#ffc800;font-weight:700;text-align:center">PTS</th>
+            </tr></thead>
+            <tbody>${rows.map((t,i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04);background:${i<2?'rgba(0,200,83,.04)':i===2?'rgba(255,200,0,.03)':'none'}">
+              <td style="padding:4px 6px;display:flex;align-items:center;gap:4px">${f(t.n)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85px">${t.n}</span>${i<2?'<span style="font-size:.5rem;background:rgba(0,200,83,.2);color:#4de0a0;border-radius:3px;padding:0 3px">Q</span>':i===2?'<span style="font-size:.5rem;background:rgba(255,200,0,.15);color:#ffc800;border-radius:3px;padding:0 3px">3°</span>':''}</td>
+              <td style="padding:4px;text-align:center;color:#889">${t.pj}</td>
+              <td style="padding:4px;text-align:center;color:#889">${t.pg}</td>
+              <td style="padding:4px;text-align:center;color:#889">${t.pe}</td>
+              <td style="padding:4px;text-align:center;color:#889">${t.pp}</td>
+              <td style="padding:4px;text-align:center;color:${t.dg>0?'#4de0a0':t.dg<0?'#ff8080':'#889'}">${t.dg>0?'+':''}${t.dg}</td>
+              <td style="padding:4px;text-align:center;font-weight:700;color:#ffc800">${t.pts}</td>
+            </tr>`).join("")}</tbody>
+          </table>
+          <div style="font-size:.56rem;color:#445;margin-top:4px;text-align:right">${useReal?'Clasificación real':'Basada en tus predicciones'}</div>`;
+        })();
       }
-    })()}
-    `}
-    <button class="btn-pdf" onclick="genPDF('${pid}')">📄 DESCARGAR MI PDF</button>
-  `:""}
+    }
+
+    if(showLiga&&grp!=="KO"&&lgMembers.length){
+      const grpMatches=MATCHES.filter(m=>m.g===grp);
+      const actuals=STATE.actuals||{};
+      const badge=(pr,ac)=>{
+        if(!pr||pr.h==="") return "<span style='color:#334;font-size:.6rem'>—</span>";
+        if(!ac||ac.h==="") return "<span style='font-size:.7rem;font-weight:600;color:#eee'>"+pr.h+"-"+pr.a+"</span>";
+        if(+pr.h===+ac.h&&+pr.a===+ac.a) return "<span style='font-size:.7rem;font-weight:700;color:#00c853'>"+pr.h+"-"+pr.a+"</span>";
+        const r1=+pr.h>+pr.a?"H":+pr.h<+pr.a?"A":"D",r2=+ac.h>+ac.a?"H":+ac.h<+ac.a?"A":"D";
+        return r1===r2?"<span style='font-size:.7rem;font-weight:600;color:#88aaff'>"+pr.h+"-"+pr.a+"</span>":"<span style='font-size:.7rem;color:#445'>"+pr.h+"-"+pr.a+"</span>";
+      };
+      grpLigaHtml=lgSelector+"<div style='background:rgba(255,200,0,.05);border:1px solid rgba(255,200,0,.18);border-radius:10px;overflow:hidden;margin-bottom:8px'>"
+        +"<div style='background:rgba(255,200,0,.1);padding:6px 10px;font-size:.62rem;color:#ffc800;font-weight:700;display:flex;align-items:center;gap:6px'>"
+        +"<span>👥 "+selLg.name+" — GRUPO "+grp+"</span>"
+        +"<span style='margin-left:auto;font-size:.58rem;font-weight:400;color:#889'>"+lgMembers.length+" participantes</span>"
+        +"</div>"
+        +"<div style='display:grid;grid-template-columns:90px "+grpMatches.map(()=>"1fr").join(" ")+";border-bottom:1px solid rgba(255,255,255,.08)'>"
+        +"<div style='padding:4px 8px;font-size:.56rem;color:#667'>JUGADOR</div>"
+        +grpMatches.map(m=>{const ac=actuals[m.id];return "<div style='padding:4px 2px;text-align:center;font-size:.55rem;color:#889;line-height:1.3'><div>"+f(m.h)+f(m.a)+"</div>"+(ac&&ac.h!==""?"<div style='font-weight:700;color:#ffc800;font-size:.58rem'>"+ac.h+"-"+ac.a+"</div>":"<div style='color:#445'>⏳</div>")+"</div>";}).join("")
+        +"</div>"
+        +lgMembers.map(m=>{
+          const mp=STATE.predictions[m.id]||{};
+          const isMe=m.id===pid;
+          return "<div style='display:grid;grid-template-columns:90px "+grpMatches.map(()=>"1fr").join(" ")+";border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"'>"
+            +"<div style='padding:5px 8px;min-width:0;font-size:.68rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":"#eee")+";overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+m.name+(isMe?" ←":"")+"</div>"
+            +grpMatches.map(mm=>"<div style='padding:5px 2px;text-align:center;display:flex;align-items:center;justify-content:center'>"+badge((mp.groups||{})[mm.id],actuals[mm.id])+"</div>").join("")
+          +"</div>";
+        }).join("")
+        +"<div style='padding:5px 8px;font-size:.55rem;color:#556;display:flex;gap:8px'>"
+        +"<span style='color:#00c853'>●exacto</span><span style='color:#88aaff'>●resultado</span><span style='color:#445'>●fallo</span><span style='margin-left:auto'>⏳pendiente</span>"
+        +"</div></div>";
+    }
+
+    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <div class="grp-tabs" style="overflow-x:auto;white-space:nowrap;flex:1">
+        ${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${g}'${ligaParam}})">${g}</button>`).join("")}
+        <button class="gtab${grp==="KO"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'KO'${ligaParam}})" style="color:#ffc800;font-weight:700">🏆 KO</button>
+      </div>
+      ${toggleHtml}
+    </div>
+    ${showLiga?(grpLigaHtml||koLigaHtml||"<div style='text-align:center;padding:1rem;color:#556;font-size:.75rem'>No hay picks de liga para mostrar aún</div>"):indivHtml}`;
+  })()):""}
+
   ${tab==="leagues"?lgTabHTML(pid):""}
   ${tab==="prob"&&hasProbLeague?(()=>{
     // Show first enabled league's simulation
