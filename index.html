@@ -917,48 +917,59 @@ function scoreKO(pred){
     const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
     let p=0;
 
-    // R32→SF
-    // R32→QF per round (SF removed — covered by Clasificado a Final below)
-    const rounds={r32:10, r16:15, qf:20};
-    Object.entries(rounds).forEach(([rnd,pts])=>{
-      const actual=aKO[rnd]||{};
-      const pick=ko[rnd]||{};
-      Object.keys(actual).forEach(idx=>{
-        if(actual[idx]&&pick[String(idx)]===actual[idx]) p+=pts;
-      });
-    });
+    // Sequential guards: each round requires the previous one to be FULLY complete
+    const groupMatches=MATCHES.filter(m=>m.g!=="KO");
+    const playedGroups=groupMatches.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
+    const groupsDone=playedGroups>=groupMatches.length;
 
-    // Clasificado a Final: +30 per team correctly predicted to reach the Final
-    // Uses SF picks (ko.sf[0] and ko.sf[1]) — the semi-final winners = finalists
-    const aFinal=aKO.final||{};
-    const pFinal=ko.final||{};
-    const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
-    const aSF=aKO.sf||{};
-    const pSF=ko.sf||{};
-    // A finalist is correctly predicted if their SF pick matches actual SF winner
-    if(actualFinalists.length>0){
-      if(pSF[0]&&actualFinalists.includes(pSF[0])) p+=30;
-      if(pSF[1]&&actualFinalists.includes(pSF[1])) p+=30;
+    const r32Entries=Object.keys(aKO.r32||{}).length;
+    const r16Entries=Object.keys(aKO.r16||{}).length;
+    const qfEntries =Object.keys(aKO.qf||{}).length;
+    const sfEntries =Object.keys(aKO.sf||{}).length;
+
+    // Each round only scores if ALL matches from prior rounds are entered
+    const canScoreR32=groupsDone;                 // groups complete
+    const canScoreR16=canScoreR32&&r32Entries>=16; // all 16 R32 played
+    const canScoreQF =canScoreR16&&r16Entries>=8;  // all 8 R16 played
+    const canScoreSF =canScoreQF &&qfEntries>=4;   // all 4 QF played
+    const canScoreFin=canScoreSF &&sfEntries>=2;   // both SF played
+
+    // R32 → +10 per correct
+    if(canScoreR32){
+      const actual=aKO.r32||{},pick=ko.r32||{};
+      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=10;});
     }
-    // +40 Champion exact
-    if(aFinal[0]&&pFinal[0]===aFinal[0]) p+=40;
-    // +30 Runner-up exact
-    if(aFinal[1]&&pFinal[1]===aFinal[1]) p+=30;
-
-    // +20 3rd place
-    const aF3=aKO.f3||{};
-    const pF3=ko.f3||{};
-    if(aF3[0]&&pF3[0]===aF3[0]) p+=20;
-
-    // +10 4th place (auto-derived: loser of 3rd place match)
-    if(aF3[1]){
-      try{
-        const B=buildBracket(pred.groups||{},ko);
-        if(B&&B.f3){
-          const pred4th=B.f3.h===pF3[0]?B.f3.a:B.f3.h;
-          if(pred4th&&pred4th===aF3[1]) p+=10;
-        }
-      }catch(e){}
+    // R16 → +15 per correct
+    if(canScoreR16){
+      const actual=aKO.r16||{},pick=ko.r16||{};
+      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=15;});
+    }
+    // QF → +20 per correct
+    if(canScoreQF){
+      const actual=aKO.qf||{},pick=ko.qf||{};
+      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=20;});
+    }
+    // SF → Clasificado a Final +30 each
+    if(canScoreFin){
+      const aFinal=aKO.final||{},pSF=ko.sf||{};
+      const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
+      if(actualFinalists.length>0){
+        if(pSF[0]&&actualFinalists.includes(pSF[0]))p+=30;
+        if(pSF[1]&&actualFinalists.includes(pSF[1]))p+=30;
+      }
+      // +40 Champion, +30 Runner-up
+      const pFinal=ko.final||{};
+      if(aFinal[0]&&pFinal[0]===aFinal[0])p+=40;
+      if(aFinal[1]&&pFinal[1]===aFinal[1])p+=30;
+      // +20 3rd place
+      const aF3=aKO.f3||{},pF3=ko.f3||{};
+      if(aF3[0]&&pF3[0]===aF3[0])p+=20;
+      if(aF3[1]){
+        try{
+          const B=buildBracket(pred.groups||{},ko);
+          if(B&&B.f3){const pred4th=B.f3.h===pF3[0]?B.f3.a:B.f3.h;if(pred4th&&pred4th===aF3[1])p+=10;}
+        }catch(e){}
+      }
     }
 
     return p;
@@ -1031,12 +1042,13 @@ function scoreKODetail(pred){
 // +8 pts per team correctly predicted to advance from groups to R32
 function scoreGroupAdvancement(pred){
   try{
-    // Need actual group results to determine real qualifiers
     const actuals=STATE.actuals||{};
-    const playedMatches=MATCHES.filter(m=>{
+    // Only score once ALL 48 group stage matches are complete
+    const groupMatches=MATCHES.filter(m=>m.g!=="KO");
+    const playedMatches=groupMatches.filter(m=>{
       const a=actuals[m.id]; return a&&a.h!==""&&a.a!=="";
     }).length;
-    if(playedMatches<3) return 0; // not enough data yet
+    if(playedMatches<groupMatches.length) return 0;
 
     // Build brackets to get R32 teams
     const Bpred=buildBracket(pred.groups||{},pred.ko||{});
@@ -2615,6 +2627,24 @@ function pgMyScore(pid){
         // KO bracket view (read-only)
         const ko=pred.ko||{};
         const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+        // Guard: only show KO results after group stage is complete
+        const groupMatches2=MATCHES.filter(m=>m.g!=="KO");
+        const playedGrps=groupMatches2.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
+        const groupsDone2=playedGrps>=groupMatches2.length;
+        const r32E=Object.keys(aKO.r32||{}).length;
+        const r16E=Object.keys(aKO.r16||{}).length;
+        const qfE =Object.keys(aKO.qf||{}).length;
+        const sfE =Object.keys(aKO.sf||{}).length;
+        const canR32=groupsDone2, canR16=canR32&&r32E>=16, canQF=canR16&&r16E>=8, canFin=canQF&&qfE>=4&&sfE>=2;
+        const roundCanScore={r32:canR32,r16:canR16,qf:canQF,sf:canFin};
+        const safeAKO={
+          r32:canR32?aKO.r32||{}:{},
+          r16:canR16?aKO.r16||{}:{},
+          qf: canQF ?aKO.qf||{}:{},
+          sf: canFin?aKO.sf||{}:{},
+          final:canFin?aKO.final||{}:{},
+          f3:  canFin?aKO.f3||{}:{}
+        };
         const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
         const kPts=scoreKO(pred);
         const gAdvPts2=scoreGroupAdvancement(pred);
@@ -2633,11 +2663,11 @@ function pgMyScore(pid){
           <div><div style="font-size:.6rem;color:#889">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
         </div>`;
         rounds.forEach(r=>{
-          const pick=ko[r.key]||{};const actual=aKO[r.key]||{};
+          const pick=ko[r.key]||{};const actual=safeAKO[r.key]||{};
           const picksExist=Object.keys(pick).length>0;const actualsExist=Object.keys(actual).length>0;
           if(!picksExist&&!actualsExist) return;
           const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
-          html+=`<div style="margin-bottom:.8rem"><div style="font-size:.62rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:.35rem">${r.label} <span style="color:#667">+${r.pts} c/u</span></div>`;
+          html+=`<div style="margin-bottom:.8rem"><div style="font-size:.62rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:.35rem">${r.label} <span style="color:#667">+${r.pts} c/u</span>${actualsExist?`<span style="float:right;color:#889;font-weight:400">${pickEntries.filter(([i,t])=>actual[i]===t).length}/${pickEntries.length} ✓</span>`:''}</div>`;
           html+=`<div style="display:flex;flex-wrap:wrap;gap:.3rem">`;
           pickEntries.forEach(([idx,team])=>{
             if(!team) return;
