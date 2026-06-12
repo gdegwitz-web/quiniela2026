@@ -4485,8 +4485,8 @@ function buildParticipantPages(doc, pid, isFirstPage){
   const lbls2={r32:"16VOS",r16:"OCTAVOS",qf:"CUARTOS",sf:"SEMIS"};
   function roundLabel(txt,x,y){col(10,20,50);font("bold",4.5);doc.text(txt,x,y,{align:"center"});}
 
-  const leftR32order=[1,4,0,2,3,5,6,7];
-  const rightR32order=[10,11,8,9,13,15,12,14];
+  const leftR32order=[1,4,0,2,10,11,8,9];
+  const rightR32order=[3,5,6,7,13,15,12,14];
   const leftRounds=[
     {rid:"r32",ms:leftR32order.map(i=>B.r32[i]),ws:B.r32w,n:8,c:0},
     {rid:"r16",ms:[B.r16[0],B.r16[1],B.r16[4],B.r16[5]],ws:B.r16w,n:4,c:1},
