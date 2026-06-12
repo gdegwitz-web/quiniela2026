@@ -916,23 +916,30 @@ function scoreKO(pred){
     const ko=pred.ko||{};
     const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
     let p=0;
+    const now=new Date();
 
-    // Sequential guards: each round requires the previous one to be FULLY complete
+    // Date guards: rounds can only score after they could physically have happened
+    const D_R32 =new Date("2026-06-29T00:00:00Z"); // R32 starts Jun 28
+    const D_R16 =new Date("2026-07-05T00:00:00Z"); // R16 starts Jul 5
+    const D_QF  =new Date("2026-07-11T00:00:00Z"); // QF starts Jul 11
+    const D_SF  =new Date("2026-07-15T00:00:00Z"); // SF starts Jul 15
+    const D_FIN =new Date("2026-07-19T00:00:00Z"); // Final Jul 19
+
+    // Data completeness guards (sequential)
     const groupMatches=MATCHES.filter(m=>m.g!=="KO");
     const playedGroups=groupMatches.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
     const groupsDone=playedGroups>=groupMatches.length;
 
-    const r32Entries=Object.keys(aKO.r32||{}).length;
-    const r16Entries=Object.keys(aKO.r16||{}).length;
-    const qfEntries =Object.keys(aKO.qf||{}).length;
-    const sfEntries =Object.keys(aKO.sf||{}).length;
+    const r32E=Object.keys(aKO.r32||{}).length;
+    const r16E=Object.keys(aKO.r16||{}).length;
+    const qfE =Object.keys(aKO.qf||{}).length;
+    const sfE =Object.keys(aKO.sf||{}).length;
 
-    // Each round only scores if ALL matches from prior rounds are entered
-    const canScoreR32=groupsDone;                 // groups complete
-    const canScoreR16=canScoreR32&&r32Entries>=16; // all 16 R32 played
-    const canScoreQF =canScoreR16&&r16Entries>=8;  // all 8 R16 played
-    const canScoreSF =canScoreQF &&qfEntries>=4;   // all 4 QF played
-    const canScoreFin=canScoreSF &&sfEntries>=2;   // both SF played
+    // Both conditions must be true: date passed AND data entered
+    const canScoreR32= groupsDone            && now>=D_R32;
+    const canScoreR16= canScoreR32&&r32E>=16 && now>=D_R16;
+    const canScoreQF = canScoreR16&&r16E>=8  && now>=D_QF;
+    const canScoreFin= canScoreQF &&qfE>=4&&sfE>=2 && now>=D_SF;
 
     // R32 → +10 per correct
     if(canScoreR32){
@@ -949,7 +956,7 @@ function scoreKO(pred){
       const actual=aKO.qf||{},pick=ko.qf||{};
       Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=20;});
     }
-    // SF → Clasificado a Final +30 each
+    // SF/Final/Podio → only after SF date
     if(canScoreFin){
       const aFinal=aKO.final||{},pSF=ko.sf||{};
       const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
@@ -957,11 +964,9 @@ function scoreKO(pred){
         if(pSF[0]&&actualFinalists.includes(pSF[0]))p+=30;
         if(pSF[1]&&actualFinalists.includes(pSF[1]))p+=30;
       }
-      // +40 Champion, +30 Runner-up
       const pFinal=ko.final||{};
       if(aFinal[0]&&pFinal[0]===aFinal[0])p+=40;
       if(aFinal[1]&&pFinal[1]===aFinal[1])p+=30;
-      // +20 3rd place
       const aF3=aKO.f3||{},pF3=ko.f3||{};
       if(aF3[0]&&pF3[0]===aF3[0])p+=20;
       if(aF3[1]){
@@ -2635,7 +2640,11 @@ function pgMyScore(pid){
         const r16E=Object.keys(aKO.r16||{}).length;
         const qfE =Object.keys(aKO.qf||{}).length;
         const sfE =Object.keys(aKO.sf||{}).length;
-        const canR32=groupsDone2, canR16=canR32&&r32E>=16, canQF=canR16&&r16E>=8, canFin=canQF&&qfE>=4&&sfE>=2;
+        const now2=new Date();
+        const canR32=groupsDone2&&now2>=new Date("2026-06-29T00:00:00Z");
+        const canR16=canR32&&r32E>=16&&now2>=new Date("2026-07-05T00:00:00Z");
+        const canQF =canR16&&r16E>=8 &&now2>=new Date("2026-07-11T00:00:00Z");
+        const canFin=canQF &&qfE>=4&&sfE>=2&&now2>=new Date("2026-07-15T00:00:00Z");
         const roundCanScore={r32:canR32,r16:canR16,qf:canQF,sf:canFin};
         const safeAKO={
           r32:canR32?aKO.r32||{}:{},
