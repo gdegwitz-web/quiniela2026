@@ -918,12 +918,8 @@ function scoreKO(pred){
     let p=0;
     const now=new Date();
 
-    // Date guards: rounds can only score after they could physically have happened
-    const D_R32 =new Date("2026-06-29T00:00:00Z"); // R32 starts Jun 28
-    const D_R16 =new Date("2026-07-05T00:00:00Z"); // R16 starts Jul 5
-    const D_QF  =new Date("2026-07-11T00:00:00Z"); // QF starts Jul 11
-    const D_SF  =new Date("2026-07-15T00:00:00Z"); // SF starts Jul 15
-    const D_FIN =new Date("2026-07-19T00:00:00Z"); // Final Jul 19
+    // Admin-controlled enable flags per round
+    const enabled=(STATE.actuals&&STATE.actuals._koEnabled)||{};
 
     // Data completeness guards (sequential)
     const groupMatches=MATCHES.filter(m=>m.g!=="KO");
@@ -935,11 +931,11 @@ function scoreKO(pred){
     const qfE =Object.keys(aKO.qf||{}).length;
     const sfE =Object.keys(aKO.sf||{}).length;
 
-    // Both conditions must be true: date passed AND data entered
-    const canScoreR32= groupsDone            && now>=D_R32;
-    const canScoreR16= canScoreR32&&r32E>=16 && now>=D_R16;
-    const canScoreQF = canScoreR16&&r16E>=8  && now>=D_QF;
-    const canScoreFin= canScoreQF &&qfE>=4&&sfE>=2 && now>=D_SF;
+    // Admin must enable each round AND data must be complete
+    const canScoreR32= groupsDone            && !!enabled.r32;
+    const canScoreR16= canScoreR32&&r32E>=16 && !!enabled.r16;
+    const canScoreQF = canScoreR16&&r16E>=8  && !!enabled.qf;
+    const canScoreFin= canScoreQF &&qfE>=4&&sfE>=2 && !!enabled.sf;
 
     // R32 → +10 per correct
     if(canScoreR32){
@@ -2641,10 +2637,11 @@ function pgMyScore(pid){
         const qfE =Object.keys(aKO.qf||{}).length;
         const sfE =Object.keys(aKO.sf||{}).length;
         const now2=new Date();
-        const canR32=groupsDone2&&now2>=new Date("2026-06-29T00:00:00Z");
-        const canR16=canR32&&r32E>=16&&now2>=new Date("2026-07-05T00:00:00Z");
-        const canQF =canR16&&r16E>=8 &&now2>=new Date("2026-07-11T00:00:00Z");
-        const canFin=canQF &&qfE>=4&&sfE>=2&&now2>=new Date("2026-07-15T00:00:00Z");
+        const enabled2=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+        const canR32=groupsDone2&&!!enabled2.r32;
+        const canR16=canR32&&r32E>=16&&!!enabled2.r16;
+        const canQF =canR16&&r16E>=8 &&!!enabled2.qf;
+        const canFin=canQF &&qfE>=4&&sfE>=2&&!!enabled2.sf;
         const roundCanScore={r32:canR32,r16:canR16,qf:canQF,sf:canFin};
         const safeAKO={
           r32:canR32?aKO.r32||{}:{},
@@ -2726,11 +2723,10 @@ function pgMyScore(pid){
               <div>${badge}</div>
             </div>
           </div>`;
-        }).join("")+`<div style="margin-top:.5rem;font-size:.62rem;letter-spacing:1px;color:#667;font-weight:700">CLASIFICACIÓN GRUPO ${grp}</div>`+
+        }).join("")+`<div style="margin-top:.5rem;font-size:.62rem;letter-spacing:1px;color:#667;font-weight:700">CLASIFICACIÓN GRUPO ${grp} <span style="font-weight:400;color:#445">· según tus predicciones</span></div>`+
         (()=>{
-          const std=calcStandings(grp,actuals2);
-          const useReal=Object.values(actuals2).some(a=>MATCHES.find(m=>m.g===grp&&m.id===Object.keys(actuals2).find(k=>k==m.id))&&a.h!=="");
-          const rows=std&&std.length?std:(()=>{const s2=calcStandings(grp,pred.groups||{});return s2||[];})();
+          // Always show standings based on USER'S predictions in "Mis picks" view
+          const rows=calcStandings(grp,pred.groups||{})||[];
           if(!rows.length) return "";
           return `<table style="width:100%;border-collapse:collapse;margin-top:.4rem;font-size:.7rem">
             <thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">
@@ -2752,7 +2748,7 @@ function pgMyScore(pid){
               <td style="padding:4px;text-align:center;font-weight:700;color:#ffc800">${t.pts}</td>
             </tr>`).join("")}</tbody>
           </table>
-          <div style="font-size:.56rem;color:#445;margin-top:4px;text-align:right">${useReal?'Clasificación real':'Basada en tus predicciones'}</div>`;
+          <div style="font-size:.56rem;color:#445;margin-top:4px;text-align:right">Basado en tus predicciones</div>`;
         })();
       }
     }
@@ -3046,8 +3042,26 @@ function pgAdmin(tab){
     </div>
 
     ${grp==="KO"?`
+    <div style="margin-bottom:.8rem">
+      <div style="font-size:.6rem;letter-spacing:1.5px;color:#667;font-weight:700;margin-bottom:6px">🔓 HABILITAR RONDAS PARA PUNTAJE</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${[
+          {key:"r32", label:"16vos"},
+          {key:"r16", label:"Octavos"},
+          {key:"qf",  label:"Cuartos"},
+          {key:"sf",  label:"Semis + Final"},
+        ].map(({key,label})=>{
+          const enabled=!!((STATE.actuals&&STATE.actuals._koEnabled)||{})[key];
+          return `<button onclick="adminToggleKORound('${key}')"
+            style="padding:5px 10px;border-radius:7px;border:1px solid ${enabled?'rgba(0,200,83,.4)':'rgba(255,255,255,.15)'};background:${enabled?'rgba(0,200,83,.12)':'rgba(255,255,255,.05)'};color:${enabled?'#4de0a0':'#889'};font-size:.7rem;font-weight:${enabled?700:400};cursor:pointer">
+            ${enabled?'✅':'⏸'} ${label}
+          </button>`;
+        }).join("")}
+      </div>
+      <div style="font-size:.6rem;color:#556;margin-top:5px">Habilita una ronda cuando quieras que sus resultados empiecen a sumar puntos.</div>
+    </div>
     <div style="font-size:.7rem;color:#889;margin-bottom:.6rem;line-height:1.5">
-      Haz clic en el equipo ganador de cada partido para confirmar quién avanza. Los equipos se cargan automáticamente desde los resultados de grupos.
+      Haz clic en el equipo ganador de cada partido para confirmar quién avanza.
     </div>
     ${adminBracketSVG()}
     `:`
@@ -4417,6 +4431,16 @@ function adminEmergencyRegister(){
   });
 }
 
+
+function adminToggleKORound(key){
+  if(!STATE.actuals) STATE.actuals={};
+  if(!STATE.actuals._koEnabled) STATE.actuals._koEnabled={};
+  STATE.actuals._koEnabled[key]=!STATE.actuals._koEnabled[key];
+  fbWriteActuals();
+  const label={r32:"16vos",r16:"Octavos",qf:"Cuartos",sf:"Semis + Final"}[key];
+  showFlash((STATE.actuals._koEnabled[key]?"✅ ":"⏸ ")+(label||key)+" "+(STATE.actuals._koEnabled[key]?"habilitado — ya suma puntos":"deshabilitado"));
+  go("admin",{tab:"results",grp:"KO"});
+}
 
 function adminTogglePaid(pid){
   _bulkWriteTimers.forEach(t=>clearTimeout(t));
