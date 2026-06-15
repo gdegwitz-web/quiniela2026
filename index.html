@@ -2418,7 +2418,8 @@ function pgMyScore(pid){
   const grp=ROUTE.grp||"A";
 
   const myLeagues=STATE.leagues.filter(l=>l.memberIds&&l.memberIds.includes(pid));
-  const hasProbLeague=myLeagues.some(l=>l.showProb);
+  const userP=STATE.participants.find(x=>x.id===pid)||{};
+  const hasProbLeague=myLeagues.some(l=>l.showProb)||!!userP.showProb;
   return `<div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;justify-content:space-between;margin:0 -.8rem .8rem">
     <div>
       <div style="font-size:1rem;font-weight:700;color:#ffc800">${p.name}</div>
@@ -3146,6 +3147,7 @@ function pgAdmin(tab){
             <div style="font-size:.48rem;font-weight:700;color:${p.paid?'#4de0a0':'#ff8080'};letter-spacing:.5px">${p.paid?'ACCESO':'BLOQUEADO'}</div>
           </div>
           <button onclick="adminEditPredictions('${p.id}')" style="background:rgba(255,150,0,.1);color:#ffaa44;border:1px solid rgba(255,150,0,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="Editar predicciones de este usuario">✏️</button>
+          <button onclick="adminToggleUserProb('${p.id}')" style="background:${p.showProb?'rgba(124,58,237,.2)':'rgba(255,255,255,.05)'};color:${p.showProb?'#c084fc':'#556'};border:1px solid ${p.showProb?'rgba(124,58,237,.35)':'rgba(255,255,255,.1)'};border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="${p.showProb?'Probabilidades: ON — click para desactivar':'Probabilidades: OFF — click para activar'}">🎲</button>
           <button onclick="adminResetPassword('${p.id}')" style="background:rgba(80,180,255,.1);color:#7ad4ff;border:1px solid rgba(80,180,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0" title="Resetear contraseña">🔑</button>
           <button onclick="toggleHide('${p.id}')" style="background:rgba(100,150,255,.1);color:#7aafff;border:1px solid rgba(100,150,255,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">${p.hidden?"👁️":"🙈"}</button>
           <button onclick="deletePart('${p.id}')" style="background:rgba(255,60,60,.1);color:#ff7070;border:1px solid rgba(255,60,60,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🗑️</button>
@@ -4429,6 +4431,17 @@ function adminEmergencyRegister(){
     SESSION.pid=pid;
     go('predict',{pid,adminOverride:true});
   });
+}
+
+
+function adminToggleUserProb(pid){
+  const p=STATE.participants.find(x=>x.id===pid);
+  if(!p) return;
+  p.showProb=!p.showProb;
+  if(window._fbDB) window._fbDB.ref('q2026/participants/'+pid+'/showProb').set(!!p.showProb);
+  localStorage.setItem(LS,JSON.stringify(STATE));
+  go('admin',{tab:'participants'});
+  showFlash(p.showProb?'🎲 Probabilidades ON para '+p.name:'🎲 Probabilidades OFF para '+p.name);
 }
 
 
