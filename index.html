@@ -901,6 +901,7 @@ function pickAdminKO(round,matchId,team){
 }
 
 function saveKOResult(round, idx, team){
+  snapshotRankings();
   if(!STATE.actuals._ko) STATE.actuals._ko={};
   if(!STATE.actuals._ko[round]) STATE.actuals._ko[round]={};
   if(team) STATE.actuals._ko[round][idx]=team;
@@ -1322,15 +1323,28 @@ function fbWriteParticipant(pid){
 }
 
 // Write ONLY actuals (match results) to Firebase — admin only
+function snapshotRankings(){
+  // Called before actuals change — saves current rankings per league as "previous"
+  if(!STATE.actuals) STATE.actuals={};
+  const snap={};
+  STATE.leagues.forEach(lg=>{
+    snap[lg.id]={};
+    const scored=lg.memberIds
+      .map(pid=>({pid,pts:lgScore(pid)}))
+      .sort((a,b)=>b.pts-a.pts);
+    scored.forEach((m,i)=>{ snap[lg.id][m.pid]=i+1; });
+  });
+  STATE.actuals._rankSnap=snap;
+}
+
 function fbWriteActuals(){
   localStorage.setItem(LS,JSON.stringify(STATE));
   if(!window._fbDB) return;
   const actuals=STATE.actuals||{};
   // Safety guard: never overwrite Firebase actuals with empty data
-  const hasGroupResults=Object.keys(actuals).some(function(k){return k!=='_resetAt'&&k!=='_ko';});
+  const hasGroupResults=Object.keys(actuals).some(function(k){return k!=='_resetAt'&&k!=='_ko'&&k!=='_koEnabled'&&k!=='_rankSnap';});
   const hasKOResults=actuals._ko&&Object.keys(actuals._ko).length>0;
   if(!hasGroupResults&&!hasKOResults){
-    // Nothing real to write — just save locally
     console.log("fbWriteActuals: no data to write, skipping Firebase");
     return;
   }
@@ -2836,6 +2850,8 @@ function lgScore(pid){
 
 function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
+  const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
+
   const scored = lg.memberIds
     .map(pid=>{
       const p=STATE.participants.find(x=>x.id===pid);
@@ -2843,19 +2859,33 @@ function lgRankHTML(lg, myPid){
       const sub=STATE.predictions[pid]?.submitted||false;
       return {pid, qn, name:p?.name||"—", pts:lgScore(pid), isMe:pid===myPid, sub, hidden:p?.hidden||false};
     })
-    .filter(m=>!m.hidden||m.isMe) // hidden participants invisible except to themselves
+    .filter(m=>!m.hidden||m.isMe)
     .sort((a,b)=>b.pts-a.pts||a.qn.localeCompare(b.qn));
 
   return `<div style="display:flex;flex-direction:column;gap:.22rem">
-    ${scored.map((m,i)=>`<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:1px solid ${m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)"}">
+    ${scored.map((m,i)=>{
+      const prevPos=snap[m.pid];
+      const curPos=i+1;
+      let moveBadge="";
+      if(prevPos&&prevPos!==curPos){
+        const diff=prevPos-curPos; // positive = moved up
+        moveBadge=diff>0
+          ? `<span style="font-size:.6rem;font-weight:700;color:#00c853;background:rgba(0,200,83,.12);border-radius:4px;padding:1px 4px;flex-shrink:0">▲${diff}</span>`
+          : `<span style="font-size:.6rem;font-weight:700;color:#ff6060;background:rgba(255,80,80,.1);border-radius:4px;padding:1px 4px;flex-shrink:0">▼${Math.abs(diff)}</span>`;
+      } else if(prevPos&&prevPos===curPos){
+        moveBadge=`<span style="font-size:.58rem;color:#445;flex-shrink:0">—</span>`;
+      }
+      return `<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:1px solid ${m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)"}">
       <span style="font-size:${i<3?"1rem":".8rem"};width:22px;flex-shrink:0;text-align:center">${medals[i]||"#"+(i+1)}</span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:.85rem;color:${m.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}${m.isMe?` <span style="font-size:.6rem;color:#ffc80099;font-weight:400">← tú</span>`:""}</div>
         ${m.qn&&m.qn!==m.name?`<div style="font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${m.qn}"</div>`:""}
         ${!m.sub?`<div style="font-size:.62rem;color:#667">Pendiente de envío</div>`:""}
       </div>
+      ${moveBadge}
       <span style="font-size:1.1rem;font-weight:700;color:${m.isMe?"#ffc800":"#aab"};flex-shrink:0">${m.pts}<small style="font-size:.55rem;color:#555;margin-left:1px">pts</small></span>
-    </div>`).join("")}
+    </div>`;
+    }).join("")}
   </div>`;
 }
 
@@ -3311,17 +3341,35 @@ function pgAdmin(tab){
     </div>
   </div>`:""}
 
-  ${tab==="stats"?adminStats(ps):""}`;
+  ${tab==="stats"?adminStats(ps, ROUTE.statsLgId):""}`;
 }
 
-function adminStats(ps){
+function adminStats(ps, selLgId){
+  const leagues=STATE.leagues||[];
+
+  // League selector tabs
+  const lgTabsHTML=leagues.length>1?`<div style="display:flex;gap:4px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
+    <button onclick="go('admin',{tab:'stats'})"
+      style="flex-shrink:0;padding:5px 10px;border-radius:7px;border:1px solid ${!selLgId?'rgba(255,200,0,.4)':'rgba(255,255,255,.1)'};background:${!selLgId?'rgba(255,200,0,.12)':'rgba(255,255,255,.04)'};color:${!selLgId?'#ffc800':'#889'};font-size:.7rem;font-weight:${!selLgId?700:400};cursor:pointer">
+      Todos
+    </button>
+    ${leagues.map(l=>{const on=l.id===selLgId;return`<button onclick="go('admin',{tab:'stats',statsLgId:'${l.id}'})"
+      style="flex-shrink:0;padding:5px 10px;border-radius:7px;border:1px solid ${on?'rgba(255,200,0,.4)':'rgba(255,255,255,.1)'};background:${on?'rgba(255,200,0,.12)':'rgba(255,255,255,.04)'};color:${on?'#ffc800':'#889'};font-size:.7rem;font-weight:${on?700:400};cursor:pointer;white-space:nowrap">
+      ${l.name}
+    </button>`;}).join("")}
+  </div>`:""
+
+  // Filter participants by selected league
+  const selLg=leagues.find(l=>l.id===selLgId);
+  const filteredPs=selLg?ps.filter(p=>selLg.memberIds.includes(p.id)):ps;
+
   // Only use submitted participants
-  const sub=ps.filter(p=>STATE.predictions[p.id]?.submitted);
-  if(sub.length<2) return `<div class="card" style="text-align:center;padding:1.5rem">
+  const sub=filteredPs.filter(p=>STATE.predictions[p.id]?.submitted);
+  if(sub.length<2) return `<div class="card">${lgTabsHTML}<div style="text-align:center;padding:1.5rem">
     <div style="font-size:2rem;margin-bottom:.5rem">📈</div>
-    <div style="font-weight:700;color:#ffc800;margin-bottom:.3rem">Estadísticas</div>
-    <div style="font-size:.78rem;color:#889">Disponible cuando haya al menos 2 quinielas enviadas.</div>
-  </div>`;
+    <div style="font-weight:700;color:#ffc800;margin-bottom:.3rem">Estadísticas${selLg?' — '+selLg.name:''}</div>
+    <div style="font-size:.78rem;color:#889">Disponible cuando haya al menos 2 quinielas enviadas${selLg?' en esta liga':''}.</div>
+  </div></div>`;
 
   const medals=["🥇","🥈","🥉"];
   const playedMatches=MATCHES.filter(m=>{const a=STATE.actuals[m.id];return a&&a.h!==""&&a.a!=="";});
@@ -3381,7 +3429,7 @@ function adminStats(ps){
     </div>`;
   }
 
-  return `
+  return `${lgTabsHTML}
   <!-- ── HIGHLIGHTS ── -->
   <div style="font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem">✨ DESTACADOS</div>
   <div style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem">
@@ -3809,7 +3857,8 @@ function clearBracket(pid){
 
 
 function saveActuals(){
-  // Admin only — writes ONLY actuals node
+  // Admin only — snapshot current rankings first, then write
+  snapshotRankings();
   const gl=document.getElementById("agl");
   fbWriteActuals();showFlash("✓ Resultados guardados");
 }
