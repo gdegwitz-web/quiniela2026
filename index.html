@@ -4859,32 +4859,7 @@ function userStatsTab(pid, myLeagues, selLgId){
     +"</div>";
   }
 
-  function mkRow(team,count,total,actual,col){
-    const isC=actual&&team===actual,isW=actual&&team!==actual;
-    return "<div style='display:flex;align-items:center;gap:.5rem;padding:5px 0;border-top:1px solid rgba(255,255,255,.04)'>"
-      +"<span style='font-size:.95rem'>"+f(team)+"</span>"
-      +"<div style='flex:1;min-width:0'>"
-        +"<div style='font-size:.8rem;font-weight:600;color:"+(isC?"#4de0a0":isW?"#ff8080":"#eee")+"'>"+team+(isC?" ✓":isW?" ✗":"")+"</div>"
-        +"<div style='background:rgba(255,255,255,.08);border-radius:3px;height:4px;margin-top:3px;overflow:hidden'><div style='background:"+(isC?"#00c853":col)+";width:"+pct(count,total)+"%;height:100%'></div></div>"
-      +"</div>"
-      +"<div style='text-align:right;flex-shrink:0'><div style='font-size:.85rem;font-weight:700;color:"+(isC?"#4de0a0":"#889")+"'>"+count+"</div><div style='font-size:.6rem;color:#445'>"+pct(count,total)+"%</div></div>"
-    +"</div>";
-  }
-
-  if(champRank.length){
-    html+="<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px'>"
-      +"<div style='font-size:.65rem;color:#ffc800;font-weight:700;letter-spacing:.5px;margin-bottom:8px'>🏆 PICKS DE CAMPEÓN</div>"
-      +champRank.map(function(e){return mkRow(e[0],e[1],sub.length,actualChamp,"rgba(255,200,0,.5)");}).join("")
-    +"</div>";
-  }
-  if(runnerRank.length){
-    html+="<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px'>"
-      +"<div style='font-size:.65rem;color:#b0b0b0;font-weight:700;letter-spacing:.5px;margin-bottom:8px'>🥈 PICKS DE SUBCAMPEÓN</div>"
-      +runnerRank.map(function(e){return mkRow(e[0],e[1],sub.length,actualRunner,"rgba(180,180,180,.4)");}).join("")
-    +"</div>";
-  }
-
-  if(!played.length&&!champRank.length) html+="<div style='text-align:center;font-size:.75rem;color:#445;padding:1rem'>Las estadísticas aparecerán cuando empiece el torneo.</div>";
+  if(!played.length) html+="<div style='text-align:center;font-size:.75rem;color:#445;padding:1rem'>Las estadísticas aparecerán cuando empiece el torneo.</div>";
 
   return html;
 }
