@@ -2437,6 +2437,8 @@ function pgMyScore(pid){
   // showProb logic: true=always show, false=always block, undefined=follow league
   const hasProbLeague= userP.showProb===true ||
     (userP.showProb!==false && myLeagues.some(l=>l.showProb));
+  const hasStatsLeague=myLeagues.some(l=>l.showStats);
+  const statsLg=hasStatsLeague?(myLeagues.find(l=>l.showStats&&l.id===ROUTE.statsLgId)||myLeagues.find(l=>l.showStats)):null;
   return `<div style="background:linear-gradient(160deg,#0b1526,#152240);padding:.7rem .8rem;display:flex;align-items:center;justify-content:space-between;margin:0 -.8rem .8rem">
     <div>
       <div style="font-size:1rem;font-weight:700;color:#ffc800">${p.name}</div>
@@ -2450,6 +2452,7 @@ function pgMyScore(pid){
     <button class="tab${tab==="score"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'score'})" style="font-size:.62rem;padding:5px 2px">🏆<br><span style="font-size:.55rem">PUNTAJE</span></button>
     <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})" style="font-size:.62rem;padding:5px 2px">📋<br><span style="font-size:.55rem">PRED.</span></button>
     <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})" style="font-size:.62rem;padding:5px 2px">🏅<br><span style="font-size:.55rem">LIGAS</span></button>
+    ${hasStatsLeague?`<button class="tab${tab==="stats"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'stats'})" style="font-size:.62rem;padding:5px 2px">📊<br><span style="font-size:.55rem">STATS</span></button>`:''}
     ${hasProbLeague?`<button class="tab${tab==="prob"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'prob'})" style="font-size:.62rem;padding:5px 2px">🎲<br><span style="font-size:.55rem">PROB.</span></button>`:''}
   </div>
   ${tab==="hoy"?hoyTab(pid,pred):""}
@@ -2814,6 +2817,7 @@ function pgMyScore(pid){
   })()):""}
 
   ${tab==="leagues"?lgTabHTML(pid):""}
+  ${tab==="stats"&&hasStatsLeague?userStatsTab(pid,myLeagues,ROUTE.statsLgId):""}
   ${tab==="prob"&&hasProbLeague?(()=>{
     // Show first enabled league's simulation
     const probLg=myLeagues.find(l=>l.showProb);
@@ -2887,7 +2891,7 @@ function lgRankHTML(lg, myPid){
     const medalSize=i<3?"1rem":".8rem";
     const meTag=(m.isMe&&!isCrybaby)?"<span style='font-size:.6rem;color:rgba(255,200,0,.6);font-weight:400'> \u2190 t\u00fa</span>":"";
     const cryBadge=isCrybaby?"<span style='font-size:1.4rem;animation:cry-shake 1s ease-in-out infinite;flex-shrink:0'>😭</span>":"";
-    const cryLabel=isCrybaby?"<div style='font-size:.6rem;color:#818cf8;margin-top:1px'>😭 El m\u00e1s llor\u00f3n oficial de la liga</div>":"";
+    const cryLabel=isCrybaby?"<div style='font-size:.6rem;color:#818cf8;margin-top:1px'>😭 "+(crybabies.length>1?"Team Llorón oficial":"El m\u00e1s llor\u00f3n oficial de la liga")+"</div>":"";
     const qnLabel=(m.qn&&m.qn!==m.name&&!isCrybaby)?"<div style='font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>\""+m.qn+"\"</div>":"";
     const pendLabel=!m.sub?"<div style='font-size:.62rem;color:#667'>Pendiente de env\u00edo</div>":"";
     rows+="<div style='display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:"+bg+";border:"+border+"'>"
@@ -2913,12 +2917,12 @@ function lgRankHTML(lg, myPid){
         +"<div style='font-size:.9rem;font-weight:800;color:#a5b4fc;margin:.2rem 0 0'>"+p.name+"</div>"
       +"</div>";
     }).join("");
-    const edition=crybabPs.length>1?" (EDICI\u00d3N GRUPAL)":"";
+    const edition=crybabPs.length>1?"TEAM LLORÓN 😭":"EL QUE MÁS LLORA 😭";
     cryCard="<style>@keyframes cry-shake{0%,100%{transform:rotate(-4deg) scale(1.02)}50%{transform:rotate(4deg) scale(1.02)}}@keyframes tear-drop{0%{opacity:0;transform:translateY(-4px)}60%{opacity:1}100%{opacity:0;transform:translateY(14px)}}@keyframes pulse-bg{0%,100%{background:rgba(99,102,241,.08)}50%{background:rgba(99,102,241,.18)}}</style>"
       +"<div style='margin-top:10px;border-radius:12px;border:2px dashed rgba(99,102,241,.4);padding:.8rem;text-align:center;animation:pulse-bg 2s ease-in-out infinite'>"
         +"<div style='font-size:.6rem;letter-spacing:2px;color:#818cf8;font-weight:700;margin-bottom:.4rem'>🏆 PREMIO ESPECIAL DE LA LIGA</div>"
         +"<div style='display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin:.2rem 0 .4rem'>"+names+"</div>"
-        +"<div style='font-size:.68rem;color:#6366f1;font-weight:600'>EL QUE M\u00c1S LLORA"+edition+"</div>"
+        +"<div style='font-size:.68rem;color:#6366f1;font-weight:600'>"+edition+"</div>"
         +"<div style='font-size:.62rem;color:#4f46e5;margin-top:.2rem'>Premio oficialmente otorgado por el organizador 👑</div>"
       +"</div>";
   }
@@ -3287,6 +3291,11 @@ function pgAdmin(tab){
             title="${lg.showProb?'Desactivar':'Activar'} tab de Probabilidades para esta liga">
             🎲 ${lg.showProb?'ON':'OFF'}
           </button>
+          <button onclick="adminToggleLeagueStats('${lg.id}')"
+            style="background:${lg.showStats?'rgba(99,102,241,.2)':'rgba(255,255,255,.06)'};color:${lg.showStats?'#a5b4fc':'#667'};border:1px solid ${lg.showStats?'rgba(99,102,241,.35)':'rgba(255,255,255,.12)'};border-radius:6px;padding:.28rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0"
+            title="${lg.showStats?'Desactivar':'Activar'} tab de Estadísticas para esta liga">
+            📊 ${lg.showStats?'ON':'OFF'}
+          </button>
           <button onclick="generateLeaguePDF('${lg.id}')"
             style="background:rgba(255,200,0,.12);color:#ffc800;border:1px solid rgba(255,200,0,.3);border-radius:6px;padding:.28rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>
           <button onclick="document.getElementById('${editId}').style.display=document.getElementById('${editId}').style.display==='none'?'block':'none'"
@@ -3544,7 +3553,7 @@ function adminStats(ps, selLgId){
       ${cryNames.length?`<div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;padding:.45rem .6rem;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:9px;margin-bottom:.55rem">
         <span style="font-size:1.2rem">😭</span>
         <span style="font-size:.82rem;font-weight:700;color:#a5b4fc">${cryNames.join(" & ")}</span>
-        <span style="font-size:.62rem;color:#6366f1;flex:1">Coronado${cryNames.length>1?"s":""} como el más llorón 👑</span>
+        <span style="font-size:.62rem;color:#6366f1;flex:1">${cryNames.length>1?"Team Llorón oficial 😭👑":"El más llorón de la liga 😭👑"}</span>
         <button onclick="adminSetCrybaby('${lg.id}','CLEAR')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#889;font-size:.65rem;padding:.25rem .5rem;cursor:pointer">✕ Quitar todos</button>
       </div>`:`<div style="font-size:.72rem;color:#556;margin-bottom:.5rem;font-style:italic">Nadie coronado aún... ¿quién llora más? 🤔</div>`}
       <div style="font-size:.6rem;color:#667;margin-bottom:.4rem">Toca para agregar/quitar del podio llorón:</div>
@@ -4658,6 +4667,226 @@ function adminToggleAllAccess(enable){
     toUpdate.forEach(pid=>{ updates['participants/'+pid+'/paid']=enable; });
     window._fbDB.ref('q2026').update(updates);
   }
+}
+
+function adminToggleLeagueStats(lid){
+  const lg=STATE.leagues.find(l=>l.id===lid);
+  if(!lg) return;
+  lg.showStats=!lg.showStats;
+  fbWriteLeague(lid);
+  go('admin',{tab:'leagues'});
+  showFlash(lg.showStats?'📊 Stats visibles para usuarios de '+lg.name:'📊 Stats desactivadas para '+lg.name);
+}
+
+function userStatsTab(pid, myLeagues, selLgId){
+  const statsLeagues=myLeagues.filter(l=>l.showStats);
+  if(!statsLeagues.length) return "";
+
+  const selLg=statsLeagues.find(l=>l.id===selLgId)||statsLeagues[0];
+  const allPs=STATE.participants.filter(p=>!p.hidden);
+
+  // League selector tabs
+  let lgTabs="";
+  if(statsLeagues.length>1){
+    lgTabs="<div style='display:flex;gap:4px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none'>"
+      +statsLeagues.map(function(l){
+        const on=l.id===selLg.id;
+        return "<button onclick=\"go('myscore',{pid:'"+pid+"',subtab:'stats',statsLgId:'"+l.id+"'})\" style='flex-shrink:0;padding:5px 10px;border-radius:7px;border:1px solid "+(on?"rgba(255,200,0,.4)":"rgba(255,255,255,.1)")+";background:"+(on?"rgba(255,200,0,.12)":"rgba(255,255,255,.04)")+";color:"+(on?"#ffc800":"#889")+";font-size:.7rem;font-weight:"+(on?700:400)+";cursor:pointer;white-space:nowrap'>"+l.name+"</button>";
+      }).join("")
+    +"</div>";
+  }
+
+  // Filter submitted participants in selected league
+  const members=selLg.memberIds.map(function(mid){return STATE.participants.find(function(x){return x.id===mid;});}).filter(Boolean);
+  const sub=members.filter(function(p){return STATE.predictions[p.id]&&STATE.predictions[p.id].submitted;});
+
+  // Match stats
+  const actuals=STATE.actuals||{};
+  const played=MATCHES.filter(function(m){const a=actuals[m.id];return a&&a.h!==""&&a.a!=="";});
+  let totalExact=0,totalCorrect=0,totalMiss=0;
+  sub.forEach(function(p){
+    played.forEach(function(m){
+      const pred2=(STATE.predictions[p.id].groups||{})[m.id];
+      const ac=actuals[m.id];
+      if(!pred2||pred2.h===""||!ac) return;
+      if(+pred2.h===+ac.h&&+pred2.a===+ac.a) totalExact++;
+      else{const r1=+pred2.h>+pred2.a?"H":+pred2.h<+pred2.a?"A":"D",r2=+ac.h>+ac.a?"H":+ac.h<+ac.a?"A":"D";if(r1===r2)totalCorrect++;else totalMiss++;}
+    });
+  });
+  const totalPred=played.length*(sub.length||1);
+  const pct=function(n,d){return d>0?Math.round(n/d*100):0;};
+
+  // Champion/runner picks
+  const champPicks={},runnerPicks={};
+  sub.forEach(function(p){
+    const ko=(STATE.predictions[p.id].ko||{});
+    const c=(ko.final||{})[0];if(c)champPicks[c]=(champPicks[c]||0)+1;
+    const sf0=(ko.sf||{})[0],sf1=(ko.sf||{})[1];
+    const runner=(ko.final||{})[1]||(c&&sf0&&sf1?(c===sf0?sf1:c===sf1?sf0:null):null);
+    if(runner)runnerPicks[runner]=(runnerPicks[runner]||0)+1;
+  });
+  const champRank=Object.entries(champPicks).sort(function(a,b){return b[1]-a[1];});
+  const runnerRank=Object.entries(runnerPicks).sort(function(a,b){return b[1]-a[1];});
+  const aKO=(actuals._ko)||{};
+  const actualChamp=(aKO.final||{})[0]||null;
+  const actualRunner=(aKO.final||{})[1]||null;
+
+  let html=lgTabs;
+
+  // Header
+  html+="<div style='font-size:.6rem;letter-spacing:2px;color:#667;font-weight:700;margin-bottom:8px'>📊 ESTADÍSTICAS — "+selLg.name+"</div>";
+
+  // Match stats block
+  if(played.length){
+    html+="<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px'>"
+      +"<div style='font-size:.65rem;color:#ffc800;font-weight:700;letter-spacing:.5px;margin-bottom:8px'>⚽ PARTIDOS JUGADOS ("+played.length+" de "+MATCHES.length+")</div>"
+      +"<div style='display:flex;text-align:center'>"
+        +"<div style='flex:1;border-right:1px solid rgba(255,255,255,.06);padding:.3rem 0'><div style='font-size:1.5rem;font-weight:800;color:#00c853'>"+totalExact+"</div><div style='font-size:.62rem;color:#4de0a0'>🎯 Exactos</div><div style='font-size:.58rem;color:#445'>"+pct(totalExact,totalPred)+"%</div></div>"
+        +"<div style='flex:1;border-right:1px solid rgba(255,255,255,.06);padding:.3rem 0'><div style='font-size:1.5rem;font-weight:800;color:#0080ff'>"+totalCorrect+"</div><div style='font-size:.62rem;color:#88aaff'>✅ Resultados</div><div style='font-size:.58rem;color:#445'>"+pct(totalCorrect,totalPred)+"%</div></div>"
+        +"<div style='flex:1;padding:.3rem 0'><div style='font-size:1.5rem;font-weight:800;color:#445'>"+totalMiss+"</div><div style='font-size:.62rem;color:#556'>❌ Fallos</div><div style='font-size:.58rem;color:#445'>"+pct(totalMiss,totalPred)+"%</div></div>"
+      +"</div>"
+      +"<div style='margin-top:8px;display:flex;border-radius:5px;overflow:hidden;height:5px;gap:1px'>"
+        +"<div style='background:#00c853;width:"+pct(totalExact,totalPred)+"%'></div>"
+        +"<div style='background:#0080ff;width:"+pct(totalCorrect,totalPred)+"%'></div>"
+        +"<div style='background:rgba(255,255,255,.1);flex:1'></div>"
+      +"</div>"
+      +"<div style='font-size:.58rem;color:#445;margin-top:4px;text-align:center'>"+sub.length+" participantes × "+played.length+" partidos</div>"
+    +"</div>";
+  }
+
+  // Per-participant stats (groups only)
+  const ranked=sub.map(function(p){
+    const pred=STATE.predictions[p.id]||{};
+    var exact=0,correct=0,wrong=0,gpts=0;
+    played.forEach(function(m){
+      const pr=(pred.groups||{})[m.id],ac=actuals[m.id];
+      if(!pr||pr.h===""||!ac) return;
+      const ph=+pr.h,pa=+pr.a,ah=+ac.h,aa=+ac.a;
+      if(ph===ah&&pa===aa){exact++;gpts+=5;}
+      else{const pw=ph>pa?"h":pa>ph?"a":"d",aw=ah>aa?"h":aa>ah?"a":"d";if(pw===aw){correct++;gpts+=3;}else wrong++;}
+    });
+    const totalPts=lgScore(p.id);
+    return {id:p.id,name:p.name,qn:(pred.quinName||p.name),exact:exact,correct:correct,wrong:wrong,gpts:gpts,pts:totalPts};
+  }).sort(function(a,b){return b.pts-a.pts;});
+
+  const topPts=ranked[0];
+  const topExact=ranked.slice().sort(function(a,b){return b.exact-a.exact;})[0];
+  const bottomPts=ranked.filter(function(p){return p.exact+p.correct+p.wrong>0;}).slice(-1)[0];
+  const mostWrong=ranked.slice().sort(function(a,b){return b.wrong-a.wrong;})[0];
+
+  // Hot matches consensus (last 6 played)
+  const hotMatches=played.slice(-6).map(function(m){
+    const ac=actuals[m.id];const sc={};
+    sub.forEach(function(p){const pr=(STATE.predictions[p.id].groups||{})[m.id];if(pr&&pr.h!=="")sc[pr.h+"-"+pr.a]=(sc[pr.h+"-"+pr.a]||0)+1;});
+    const top=Object.entries(sc).sort(function(a,b){return b[1]-a[1];})[0];
+    return {m:m,ac:ac,topPred:top?top[0]:null,topN:top?top[1]:0};
+  }).filter(function(x){return x.topPred;});
+
+  // Crybaby block
+  const crybabies2=Array.isArray(selLg.crybabies)?selLg.crybabies:selLg.crybaby?[selLg.crybaby]:[];
+  const cryPs=crybabies2.map(function(cid){return STATE.participants.find(function(x){return x.id===cid;});}).filter(Boolean);
+
+  function statCard(emoji,label,name,value,color){
+    return "<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .8rem;display:flex;align-items:center;gap:.65rem'>"
+      +"<span style='font-size:1.5rem;flex-shrink:0'>"+emoji+"</span>"
+      +"<div style='flex:1;min-width:0'>"
+        +"<div style='font-size:.65rem;color:#889;letter-spacing:.5px'>"+label+"</div>"
+        +"<div style='font-size:.88rem;font-weight:700;color:"+(color||"#eee")+";overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+name+"</div>"
+      +"</div>"
+      +"<div style='font-size:1.1rem;font-weight:700;color:"+(color||"#ffc800")+";flex-shrink:0'>"+value+"</div>"
+    +"</div>";
+  }
+
+  html+="<div style='font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem'>✨ DESTACADOS</div>"
+    +"<div style='display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem'>"
+    +(topPts?statCard("🏆","Líder de la liga",topPts.name,topPts.pts+" pts","#ffc800"):"")
+    +(topExact?statCard("⭐","Más marcadores exactos",topExact.name,topExact.exact+" exactos","#4de0a0"):"")
+    +(bottomPts&&bottomPts.id!==topPts?.id?statCard("😬","Menos puntos (ánimo!)",bottomPts.name,bottomPts.pts+" pts","#ff8080"):"")
+    +(mostWrong&&mostWrong.wrong>0?statCard("🙈","Más resultados fallidos",mostWrong.name,mostWrong.wrong+" fallos","#ffaa44"):"")
+  +"</div>";
+
+  // Full ranking table
+  if(ranked.length){
+    const medals2=["🥇","🥈","🥉"];
+    html+="<div style='font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem'>📊 TABLA COMPLETA ("+played.length+" partidos jugados)</div>"
+      +"<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;margin-bottom:.9rem'>"
+        +"<div style='display:grid;grid-template-columns:28px 1fr 38px 38px 38px 48px;gap:0;padding:.4rem .6rem;background:rgba(255,200,0,.08);font-size:.6rem;color:#ffc800;font-weight:700;letter-spacing:.5px'>"
+          +"<span>#</span><span>PARTICIPANTE</span><span style='text-align:center'>⭐</span><span style='text-align:center'>✓</span><span style='text-align:center'>✗</span><span style='text-align:right'>PTS</span>"
+        +"</div>"
+        +ranked.map(function(p,i){
+          const isMe=p.id===pid;
+          return "<div style='display:grid;grid-template-columns:28px 1fr 38px 38px 38px 48px;gap:0;padding:.45rem .6rem;border-top:1px solid rgba(255,255,255,.05);background:"+(isMe?"rgba(255,200,0,.06)":i===0?"rgba(255,200,0,.03)":"none")+"'>"
+            +"<span style='font-size:"+(i<3?"1rem":".75rem")+"'>"+(medals2[i]||"#"+(i+1))+"</span>"
+            +"<div style='min-width:0'>"
+              +"<div style='font-size:.8rem;font-weight:"+(isMe||i===0?700:500)+";color:"+(isMe?"#ffc800":i===0?"#ffc800":"#eee")+";overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+p.name+(isMe?" ←":"")+"</div>"
+              +(p.qn&&p.qn!==p.name?"<div style='font-size:.6rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>\""+p.qn+"\"</div>":"<div style='font-size:.6rem;color:#667'>&nbsp;</div>")
+            +"</div>"
+            +"<span style='text-align:center;font-size:.8rem;color:#4de0a0;font-weight:700'>"+p.exact+"</span>"
+            +"<span style='text-align:center;font-size:.8rem;color:#88aaff'>"+p.correct+"</span>"
+            +"<span style='text-align:center;font-size:.8rem;color:#f77'>"+p.wrong+"</span>"
+            +"<span style='text-align:right;font-size:.95rem;font-weight:700;color:"+(isMe||i===0?"#ffc800":"#aab")+"'>"+p.pts+"</span>"
+          +"</div>";
+        }).join("")
+      +"</div>";
+  }
+
+  // Consensus vs result (last 6 matches)
+  if(hotMatches.length){
+    html+="<div style='font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem'>🎯 CONSENSO VS RESULTADO (últimos partidos)</div>"
+      +"<div style='display:flex;flex-direction:column;gap:.3rem;margin-bottom:.9rem'>"
+      +hotMatches.map(function(x){
+        const hit=x.topPred===x.ac.h+"-"+x.ac.a;
+        const pctN=Math.round(x.topN/sub.length*100);
+        return "<div style='display:flex;align-items:center;gap:.5rem;padding:.4rem .65rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:8px;font-size:.75rem'>"
+          +"<div style='flex:1;min-width:0'>"
+            +"<div style='font-weight:600;color:#eee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+f(x.m.h)+" "+trunc(x.m.h,8)+" vs "+trunc(x.m.a,8)+" "+f(x.m.a)+"</div>"
+            +"<div style='font-size:.65rem;color:#889;margin-top:.1rem'>Más votado: <strong style=\"color:#eee\">"+x.topPred+"</strong> ("+pctN+"%) · Real: <strong style=\"color:"+(hit?"#4de0a0":"#ff8080")+"\">"+x.ac.h+"-"+x.ac.a+"</strong></div>"
+          +"</div>"
+          +"<span style='font-size:1rem'>"+(hit?"✅":"❌")+"</span>"
+        +"</div>";
+      }).join("")
+      +"</div>";
+  }
+
+  // Crybaby card
+  if(cryPs.length){
+    const edition=cryPs.length>1?"TEAM LLORÓN":"EL QUE MÁS LLORA";
+    const names=cryPs.map(function(p){return "<div style='text-align:center'><div style='font-size:2rem'>😭</div><div style='font-size:.85rem;font-weight:700;color:#a5b4fc'>"+p.name+"</div></div>";}).join("");
+    html+="<div style='border-radius:12px;border:2px dashed rgba(99,102,241,.4);padding:.8rem;text-align:center;animation:pulse-bg 2s ease-in-out infinite'>"
+      +"<div style='font-size:.6rem;letter-spacing:2px;color:#818cf8;font-weight:700;margin-bottom:.4rem'>🏆 PREMIO ESPECIAL</div>"
+      +"<div style='display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin:.2rem 0 .4rem'>"+names+"</div>"
+      +"<div style='font-size:.68rem;color:#6366f1;font-weight:600'>"+edition+"</div>"
+    +"</div>";
+  }
+
+  function mkRow(team,count,total,actual,col){
+    const isC=actual&&team===actual,isW=actual&&team!==actual;
+    return "<div style='display:flex;align-items:center;gap:.5rem;padding:5px 0;border-top:1px solid rgba(255,255,255,.04)'>"
+      +"<span style='font-size:.95rem'>"+f(team)+"</span>"
+      +"<div style='flex:1;min-width:0'>"
+        +"<div style='font-size:.8rem;font-weight:600;color:"+(isC?"#4de0a0":isW?"#ff8080":"#eee")+"'>"+team+(isC?" ✓":isW?" ✗":"")+"</div>"
+        +"<div style='background:rgba(255,255,255,.08);border-radius:3px;height:4px;margin-top:3px;overflow:hidden'><div style='background:"+(isC?"#00c853":col)+";width:"+pct(count,total)+"%;height:100%'></div></div>"
+      +"</div>"
+      +"<div style='text-align:right;flex-shrink:0'><div style='font-size:.85rem;font-weight:700;color:"+(isC?"#4de0a0":"#889")+"'>"+count+"</div><div style='font-size:.6rem;color:#445'>"+pct(count,total)+"%</div></div>"
+    +"</div>";
+  }
+
+  if(champRank.length){
+    html+="<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px'>"
+      +"<div style='font-size:.65rem;color:#ffc800;font-weight:700;letter-spacing:.5px;margin-bottom:8px'>🏆 PICKS DE CAMPEÓN</div>"
+      +champRank.map(function(e){return mkRow(e[0],e[1],sub.length,actualChamp,"rgba(255,200,0,.5)");}).join("")
+    +"</div>";
+  }
+  if(runnerRank.length){
+    html+="<div style='background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 13px;margin-bottom:8px'>"
+      +"<div style='font-size:.65rem;color:#b0b0b0;font-weight:700;letter-spacing:.5px;margin-bottom:8px'>🥈 PICKS DE SUBCAMPEÓN</div>"
+      +runnerRank.map(function(e){return mkRow(e[0],e[1],sub.length,actualRunner,"rgba(180,180,180,.4)");}).join("")
+    +"</div>";
+  }
+
+  if(!played.length&&!champRank.length) html+="<div style='text-align:center;font-size:.75rem;color:#445;padding:1rem'>Las estadísticas aparecerán cuando empiece el torneo.</div>";
+
+  return html;
 }
 
 function adminToggleLeagueProb(lid){
