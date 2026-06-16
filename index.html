@@ -2855,7 +2855,6 @@ function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
   const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
   const crybabies=Array.isArray(lg.crybabies)?lg.crybabies:lg.crybaby?[lg.crybaby]:[];
-  const crybabPs=crybabies.map(cid=>scored.find(m=>m.pid===cid)).filter(Boolean);
   const scored = lg.memberIds
     .map(pid=>{
       const p=STATE.participants.find(x=>x.id===pid);
@@ -2865,8 +2864,7 @@ function lgRankHTML(lg, myPid){
     })
     .filter(m=>!m.hidden||m.isMe)
     .sort((a,b)=>b.pts-a.pts||a.qn.localeCompare(b.qn));
-
-      const isCrybaby=crybabies.includes(m.pid);
+  const crybabPs=crybabies.map(cid=>scored.find(m=>m.pid===cid)).filter(Boolean);
 
   return `<div style="display:flex;flex-direction:column;gap:.22rem">
     ${scored.map((m,i)=>{
@@ -2881,7 +2879,7 @@ function lgRankHTML(lg, myPid){
       } else if(prevPos&&prevPos===curPos){
         moveBadge=`<span style="font-size:.58rem;color:#445;flex-shrink:0">—</span>`;
       }
-      const isCrybaby=m.pid===crybaby;
+      const isCrybaby=crybabies.includes(m.pid);
       return `<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${isCrybaby?'rgba(99,102,241,.1)':m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:${isCrybaby?'2px dashed rgba(99,102,241,.4)':'1px solid '+(m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)")}"${isCrybaby?' style2="animation:pulse-bg 2.5s ease-in-out infinite"':''}>
       <span style="font-size:${i<3?"1rem":".8rem"};width:22px;flex-shrink:0;text-align:center">${medals[i]||"#"+(i+1)}</span>
       <div style="flex:1;min-width:0">
