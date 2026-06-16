@@ -2866,32 +2866,55 @@ function lgRankHTML(lg, myPid){
     .filter(m=>!m.hidden||m.isMe)
     .sort((a,b)=>b.pts-a.pts||a.qn.localeCompare(b.qn));
 
+  const crybabP=crybaby?scored.find(m=>m.pid===crybaby):null;
+
   return `<div style="display:flex;flex-direction:column;gap:.22rem">
     ${scored.map((m,i)=>{
       const prevPos=snap[m.pid];
       const curPos=i+1;
       let moveBadge="";
       if(prevPos&&prevPos!==curPos){
-        const diff=prevPos-curPos; // positive = moved up
+        const diff=prevPos-curPos;
         moveBadge=diff>0
           ? `<span style="font-size:.6rem;font-weight:700;color:#00c853;background:rgba(0,200,83,.12);border-radius:4px;padding:1px 4px;flex-shrink:0">▲${diff}</span>`
           : `<span style="font-size:.6rem;font-weight:700;color:#ff6060;background:rgba(255,80,80,.1);border-radius:4px;padding:1px 4px;flex-shrink:0">▼${Math.abs(diff)}</span>`;
       } else if(prevPos&&prevPos===curPos){
         moveBadge=`<span style="font-size:.58rem;color:#445;flex-shrink:0">—</span>`;
       }
-      return `<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:1px solid ${m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)"}">
+      const isCrybaby=m.pid===crybaby;
+      return `<div style="display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:${isCrybaby?'rgba(99,102,241,.1)':m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)"};border:${isCrybaby?'2px dashed rgba(99,102,241,.4)':'1px solid '+(m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)")}"${isCrybaby?' style2="animation:pulse-bg 2.5s ease-in-out infinite"':''}>
       <span style="font-size:${i<3?"1rem":".8rem"};width:22px;flex-shrink:0;text-align:center">${medals[i]||"#"+(i+1)}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.85rem;color:${m.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}${m.isMe?` <span style="font-size:.6rem;color:#ffc80099;font-weight:400">← tú</span>`:""}${m.pid===crybaby?` <span style="font-size:.75rem" title="El que más llora de la liga 😭">😭</span>`:""}
+        <div style="font-weight:700;font-size:.85rem;color:${isCrybaby?'#a5b4fc':m.isMe?"#ffc800":"#eee"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${m.name}${m.isMe&&!isCrybaby?` <span style="font-size:.6rem;color:#ffc80099;font-weight:400">← tú</span>`:""}
         </div>
-        ${m.qn&&m.qn!==m.name?`<div style="font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${m.qn}"</div>`:""}
+        ${isCrybaby?`<div style="font-size:.6rem;color:#818cf8;margin-top:1px">😭 El más llorón oficial de la liga</div>`:""}
+        ${m.qn&&m.qn!==m.name&&!isCrybaby?`<div style="font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${m.qn}"</div>`:""}
         ${!m.sub?`<div style="font-size:.62rem;color:#667">Pendiente de envío</div>`:""}
       </div>
+      ${isCrybaby?`<span style="font-size:1.4rem;animation:cry-shake 1s ease-in-out infinite;flex-shrink:0">😭</span>`:""}
       ${moveBadge}
-      <span style="font-size:1.1rem;font-weight:700;color:${m.isMe?"#ffc800":"#aab"};flex-shrink:0">${m.pts}<small style="font-size:.55rem;color:#555;margin-left:1px">pts</small></span>
+      <span style="font-size:1.1rem;font-weight:700;color:${isCrybaby?'#a5b4fc':m.isMe?"#ffc800":"#aab"};flex-shrink:0">${m.pts}<small style="font-size:.55rem;color:#555;margin-left:1px">pts</small></span>
     </div>`;
     }).join("")}
-  </div>`;
+  </div>
+  ${crybabP?`
+  <style>
+    @keyframes cry-shake{0%,100%{transform:rotate(-4deg) scale(1.02)}50%{transform:rotate(4deg) scale(1.02)}}
+    @keyframes tear-drop{0%{opacity:0;transform:translateY(-4px)}60%{opacity:1}100%{opacity:0;transform:translateY(14px)}}
+    @keyframes pulse-bg{0%,100%{background:rgba(99,102,241,.08)}50%{background:rgba(99,102,241,.18)}}
+  </style>
+  <div style="margin-top:10px;border-radius:12px;border:2px dashed rgba(99,102,241,.4);padding:.8rem;text-align:center;animation:pulse-bg 2s ease-in-out infinite;position:relative;overflow:hidden">
+    <div style="font-size:.6rem;letter-spacing:2px;color:#818cf8;font-weight:700;margin-bottom:.4rem">🏆 PREMIO ESPECIAL DE LA LIGA</div>
+    <div style="position:relative;display:inline-block">
+      <span style="font-size:3rem;display:inline-block;animation:cry-shake 1s ease-in-out infinite">😭</span>
+      <span style="position:absolute;top:12px;right:-4px;font-size:.8rem;animation:tear-drop 1.2s ease-in infinite">💧</span>
+      <span style="position:absolute;top:16px;left:-4px;font-size:.65rem;animation:tear-drop 1.2s ease-in infinite .4s">💧</span>
+    </div>
+    <div style="font-size:1rem;font-weight:800;color:#a5b4fc;margin:.3rem 0 .1rem">${crybabP.name}</div>
+    <div style="font-size:.68rem;color:#6366f1;font-weight:600">EL QUE MÁS LLORA</div>
+    <div style="font-size:.62rem;color:#4f46e5;margin-top:.2rem">Premio oficialmente otorgado por el organizador 👑</div>
+  </div>`:""}`;
 }
 
 function lgTabHTML(pid){
