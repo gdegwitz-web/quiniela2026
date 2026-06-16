@@ -2854,8 +2854,8 @@ function lgScore(pid){
 function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
   const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
-  const crybaby=lg.crybaby||null;
-
+  const crybabies=Array.isArray(lg.crybabies)?lg.crybabies:lg.crybaby?[lg.crybaby]:[];
+  const crybabPs=crybabies.map(cid=>scored.find(m=>m.pid===cid)).filter(Boolean);
   const scored = lg.memberIds
     .map(pid=>{
       const p=STATE.participants.find(x=>x.id===pid);
@@ -2866,7 +2866,7 @@ function lgRankHTML(lg, myPid){
     .filter(m=>!m.hidden||m.isMe)
     .sort((a,b)=>b.pts-a.pts||a.qn.localeCompare(b.qn));
 
-  const crybabP=crybaby?scored.find(m=>m.pid===crybaby):null;
+      const isCrybaby=crybabies.includes(m.pid);
 
   return `<div style="display:flex;flex-direction:column;gap:.22rem">
     ${scored.map((m,i)=>{
@@ -2898,7 +2898,7 @@ function lgRankHTML(lg, myPid){
     </div>`;
     }).join("")}
   </div>
-  ${crybabP?`
+  ${crybabPs.length?`
   <style>
     @keyframes cry-shake{0%,100%{transform:rotate(-4deg) scale(1.02)}50%{transform:rotate(4deg) scale(1.02)}}
     @keyframes tear-drop{0%{opacity:0;transform:translateY(-4px)}60%{opacity:1}100%{opacity:0;transform:translateY(14px)}}
@@ -2906,13 +2906,17 @@ function lgRankHTML(lg, myPid){
   </style>
   <div style="margin-top:10px;border-radius:12px;border:2px dashed rgba(99,102,241,.4);padding:.8rem;text-align:center;animation:pulse-bg 2s ease-in-out infinite;position:relative;overflow:hidden">
     <div style="font-size:.6rem;letter-spacing:2px;color:#818cf8;font-weight:700;margin-bottom:.4rem">🏆 PREMIO ESPECIAL DE LA LIGA</div>
-    <div style="position:relative;display:inline-block">
-      <span style="font-size:3rem;display:inline-block;animation:cry-shake 1s ease-in-out infinite">😭</span>
-      <span style="position:absolute;top:12px;right:-4px;font-size:.8rem;animation:tear-drop 1.2s ease-in infinite">💧</span>
-      <span style="position:absolute;top:16px;left:-4px;font-size:.65rem;animation:tear-drop 1.2s ease-in infinite .4s">💧</span>
+    <div style="display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin:.2rem 0 .4rem">
+      ${crybabPs.map(p=>`<div style="text-align:center">
+        <div style="position:relative;display:inline-block">
+          <span style="font-size:2.4rem;display:inline-block;animation:cry-shake 1s ease-in-out infinite">😭</span>
+          <span style="position:absolute;top:8px;right:-4px;font-size:.7rem;animation:tear-drop 1.2s ease-in infinite">💧</span>
+          <span style="position:absolute;top:12px;left:-4px;font-size:.6rem;animation:tear-drop 1.2s ease-in infinite .4s">💧</span>
+        </div>
+        <div style="font-size:.9rem;font-weight:800;color:#a5b4fc;margin:.2rem 0 0">${p.name}</div>
+      </div>`).join("")}
     </div>
-    <div style="font-size:1rem;font-weight:800;color:#a5b4fc;margin:.3rem 0 .1rem">${crybabP.name}</div>
-    <div style="font-size:.68rem;color:#6366f1;font-weight:600">EL QUE MÁS LLORA</div>
+    <div style="font-size:.68rem;color:#6366f1;font-weight:600">EL QUE MÁS LLORA${crybabPs.length>1?" (EDICIÓN GRUPAL)":""}</div>
     <div style="font-size:.62rem;color:#4f46e5;margin-top:.2rem">Premio oficialmente otorgado por el organizador 👑</div>
   </div>`:""}`;
 }
@@ -3528,20 +3532,20 @@ function adminStats(ps, selLgId){
   ${leagues.length?`<div style="font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem">😭 EL QUE MÁS LLORA</div>
   ${(selLg?[selLg]:leagues).map(lg=>{
     const lgMembers=lg.memberIds.map(mid=>STATE.participants.find(x=>x.id===mid)).filter(Boolean);
-    const crybaby=lg.crybaby?STATE.participants.find(x=>x.id===lg.crybaby):null;
+    const lgCrybabies=Array.isArray(lg.crybabies)?lg.crybabies:lg.crybaby?[lg.crybaby]:[];
+    const cryNames=lgCrybabies.map(cid=>STATE.participants.find(x=>x.id===cid)?.name).filter(Boolean);
     return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .85rem;margin-bottom:.5rem">
       <div style="font-size:.65rem;color:#889;margin-bottom:.5rem;font-weight:600">${lg.name}</div>
-      ${crybaby?`<div style="display:flex;align-items:center;gap:.7rem;padding:.55rem .7rem;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:9px;margin-bottom:.55rem">
-        <span style="font-size:1.8rem;animation:wobble 1.2s infinite">😭</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.88rem;font-weight:700;color:#a5b4fc">${crybaby.name}</div>
-          <div style="font-size:.65rem;color:#667;margin-top:1px">Coronado oficialmente como el más llorón de la liga 👑</div>
-        </div>
-        <button onclick="adminSetCrybaby('${lg.id}',null)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#889;font-size:.65rem;padding:.25rem .5rem;cursor:pointer">✕</button>
+      ${cryNames.length?`<div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;padding:.45rem .6rem;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:9px;margin-bottom:.55rem">
+        <span style="font-size:1.2rem">😭</span>
+        <span style="font-size:.82rem;font-weight:700;color:#a5b4fc">${cryNames.join(" & ")}</span>
+        <span style="font-size:.62rem;color:#6366f1;flex:1">Coronado${cryNames.length>1?"s":""} como el más llorón 👑</span>
+        <button onclick="adminSetCrybaby('${lg.id}','CLEAR')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#889;font-size:.65rem;padding:.25rem .5rem;cursor:pointer">✕ Quitar todos</button>
       </div>`:`<div style="font-size:.72rem;color:#556;margin-bottom:.5rem;font-style:italic">Nadie coronado aún... ¿quién llora más? 🤔</div>`}
+      <div style="font-size:.6rem;color:#667;margin-bottom:.4rem">Toca para agregar/quitar del podio llorón:</div>
       <div style="display:flex;flex-wrap:wrap;gap:.3rem">
         ${lgMembers.map(p=>{
-          const isSelected=lg.crybaby===p.id;
+          const isSelected=lgCrybabies.includes(p.id);
           return `<button onclick="adminSetCrybaby('${lg.id}','${p.id}')"
             style="padding:4px 8px;border-radius:6px;border:1px solid ${isSelected?'rgba(99,102,241,.4)':'rgba(255,255,255,.1)'};background:${isSelected?'rgba(99,102,241,.15)':'rgba(255,255,255,.04)'};color:${isSelected?'#a5b4fc':'#889'};font-size:.68rem;cursor:pointer">
             ${isSelected?'😭 ':''}<span>${p.name}</span>
@@ -3555,11 +3559,24 @@ function adminStats(ps, selLgId){
 function adminSetCrybaby(lgId, pid){
   const lg=STATE.leagues.find(l=>l.id===lgId);
   if(!lg) return;
-  if(pid===null){ delete lg.crybaby; showFlash("😅 Corona retirada"); }
-  else{
-    lg.crybaby=pid;
-    const p=STATE.participants.find(x=>x.id===pid);
-    showFlash("😭 "+p?.name+" coronado/a como el más llorón!");
+  // Migrate legacy single crybaby to array
+  if(!Array.isArray(lg.crybabies)) lg.crybabies=lg.crybaby?[lg.crybaby]:[];
+  delete lg.crybaby; // remove legacy field
+
+  if(pid==='CLEAR'){
+    lg.crybabies=[];
+    showFlash("😅 Todas las coronas lloronas retiradas");
+  } else {
+    const idx=lg.crybabies.indexOf(pid);
+    if(idx>=0){
+      lg.crybabies.splice(idx,1);
+      const p=STATE.participants.find(x=>x.id===pid);
+      showFlash("😅 Corona retirada a "+p?.name);
+    } else {
+      lg.crybabies.push(pid);
+      const p=STATE.participants.find(x=>x.id===pid);
+      showFlash("😭 "+p?.name+" coronado/a como llorón!");
+    }
   }
   fbWriteLeague(lgId);
   go("admin",{tab:"stats",statsLgId:ROUTE.statsLgId||""});
