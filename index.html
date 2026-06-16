@@ -2859,6 +2859,7 @@ function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
   const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
   const crybabies=Array.isArray(lg.crybabies)?lg.crybabies:lg.crybaby?[lg.crybaby]:[];
+  const inversas=Array.isArray(lg.inversas)?lg.inversas:[];
   const scored=lg.memberIds
     .map(function(pid){
       const p=STATE.participants.find(function(x){return x.id===pid;});
@@ -2869,12 +2870,14 @@ function lgRankHTML(lg, myPid){
     .filter(function(m){return !m.hidden||m.isMe;})
     .sort(function(a,b){return b.pts-a.pts||a.qn.localeCompare(b.qn);});
   const crybabPs=crybabies.map(function(cid){return scored.find(function(m){return m.pid===cid;});}).filter(Boolean);
+  const inversaPs=inversas.map(function(cid){return scored.find(function(m){return m.pid===cid;});}).filter(Boolean);
 
   let rows="";
   scored.forEach(function(m,i){
     const prevPos=snap[m.pid];
     const curPos=i+1;
     const isCrybaby=crybabies.includes(m.pid);
+    const isInversa=inversas.includes(m.pid);
     let moveBadge="";
     if(prevPos&&prevPos!==curPos){
       const diff=prevPos-curPos;
@@ -2883,24 +2886,29 @@ function lgRankHTML(lg, myPid){
     } else if(prevPos&&prevPos===curPos){
       moveBadge="<span style='font-size:.58rem;color:#445;flex-shrink:0'>—</span>";
     }
-    const bg=isCrybaby?"rgba(99,102,241,.1)":m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)";
-    const border=isCrybaby?"2px dashed rgba(99,102,241,.4)":"1px solid "+(m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)");
-    const nameColor=isCrybaby?"#a5b4fc":m.isMe?"#ffc800":"#eee";
-    const ptsColor=isCrybaby?"#a5b4fc":m.isMe?"#ffc800":"#aab";
+    const bg=isCrybaby?"rgba(99,102,241,.1)":isInversa?"rgba(239,68,68,.08)":m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)";
+    const border=isCrybaby?"2px dashed rgba(99,102,241,.4)":isInversa?"2px dashed rgba(239,68,68,.35)":"1px solid "+(m.isMe?"rgba(255,200,0,.3)":"rgba(255,255,255,.07)");
+    const nameColor=isCrybaby?"#a5b4fc":isInversa?"#fca5a5":m.isMe?"#ffc800":"#eee";
+    const ptsColor=isCrybaby?"#a5b4fc":isInversa?"#fca5a5":m.isMe?"#ffc800":"#aab";
     const medal=i<3?medals[i]:"#"+(i+1);
     const medalSize=i<3?"1rem":".8rem";
-    const meTag=(m.isMe&&!isCrybaby)?"<span style='font-size:.6rem;color:rgba(255,200,0,.6);font-weight:400'> \u2190 t\u00fa</span>":"";
+    const meTag=(m.isMe&&!isCrybaby&&!isInversa)?"<span style='font-size:.6rem;color:rgba(255,200,0,.6);font-weight:400'> \u2190 t\u00fa</span>":"";
+    const nameHtml=isInversa
+      ?"<span style='display:inline-block;transform:rotate(180deg);font-weight:700;color:"+nameColor+"'>"+m.name+"</span>"
+      :"<span style='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:"+nameColor+"'>"+m.name+meTag+"</span>";
     const cryBadge=isCrybaby?"<span style='font-size:1.4rem;animation:cry-shake 1s ease-in-out infinite;flex-shrink:0'>😭</span>":"";
+    const inversaBadge=isInversa?"<span style='font-size:1.4rem;display:inline-block;transform:rotate(180deg);flex-shrink:0'>🏆</span>":"";
     const cryLabel=isCrybaby?"<div style='font-size:.6rem;color:#818cf8;margin-top:1px'>😭 "+(crybabies.length>1?"Team Llorón oficial":"El m\u00e1s llor\u00f3n oficial de la liga")+"</div>":"";
-    const qnLabel=(m.qn&&m.qn!==m.name&&!isCrybaby)?"<div style='font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>\""+m.qn+"\"</div>":"";
+    const inversaLabel=isInversa?"<div style='font-size:.6rem;color:#fca5a5;margin-top:1px'>🙃 Rey/Reina de la Inversa</div>":"";
+    const qnLabel=(m.qn&&m.qn!==m.name&&!isCrybaby&&!isInversa)?"<div style='font-size:.65rem;color:#556;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>\""+m.qn+"\"</div>":"";
     const pendLabel=!m.sub?"<div style='font-size:.62rem;color:#667'>Pendiente de env\u00edo</div>":"";
     rows+="<div style='display:flex;align-items:center;gap:.55rem;padding:.52rem .7rem;border-radius:9px;background:"+bg+";border:"+border+"'>"
       +"<span style='font-size:"+medalSize+";width:22px;flex-shrink:0;text-align:center'>"+medal+"</span>"
       +"<div style='flex:1;min-width:0'>"
-        +"<div style='font-weight:700;font-size:.85rem;color:"+nameColor+";overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+m.name+meTag+"</div>"
-        +cryLabel+qnLabel+pendLabel
+        +"<div style='font-size:.85rem;overflow:hidden'>"+nameHtml+"</div>"
+        +cryLabel+inversaLabel+qnLabel+pendLabel
       +"</div>"
-      +cryBadge+moveBadge
+      +cryBadge+inversaBadge+moveBadge
       +"<span style='font-size:1.1rem;font-weight:700;color:"+ptsColor+";flex-shrink:0'>"+m.pts+"<small style='font-size:.55rem;color:#555;margin-left:1px'>pts</small></span>"
     +"</div>";
   });
@@ -2927,7 +2935,23 @@ function lgRankHTML(lg, myPid){
       +"</div>";
   }
 
-  return "<div style='display:flex;flex-direction:column;gap:.22rem'>"+rows+"</div>"+cryCard;
+  let inversaCard="";
+  if(inversaPs.length){
+    const names2=inversaPs.map(function(p){
+      return "<div style='text-align:center;transform:rotate(180deg)'>"
+        +"<div style='font-size:1rem;font-weight:800;color:#fca5a5'>"+p.name+"</div>"
+        +"<div style='font-size:.75rem'>🏆</div>"
+      +"</div>";
+    }).join("");
+    inversaCard="<div style='margin-top:8px;border-radius:12px;border:2px dashed rgba(239,68,68,.35);padding:.8rem;text-align:center;background:rgba(239,68,68,.06)'>"
+      +"<div style='font-size:.6rem;letter-spacing:2px;color:#fca5a5;font-weight:700;margin-bottom:.4rem'>🙃 PREMIO ESPECIAL</div>"
+      +"<div style='display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin:.2rem 0 .4rem'>"+names2+"</div>"
+      +"<div style='font-size:.68rem;color:#ef4444;font-weight:600'>"+(inversaPs.length>1?"TEAM INVERSA":"REY/REINA DE LA INVERSA")+"</div>"
+      +"<div style='font-size:.62rem;color:#dc2626;margin-top:.2rem'>Siempre al revés — coronado por el organizador 👑</div>"
+    +"</div>";
+  }
+
+  return "<div style='display:flex;flex-direction:column;gap:.22rem'>"+rows+"</div>"+cryCard+inversaCard;
 }
 
 function lgTabHTML(pid){
@@ -3567,7 +3591,58 @@ function adminStats(ps, selLgId){
         }).join("")}
       </div>
     </div>`;
+  }).join("")}`:""}
+
+  <!-- ── 🙃 REY DE LA INVERSA ── -->
+  ${leagues.length?`<div style="font-size:.68rem;letter-spacing:2px;color:#fca5a5;font-weight:700;margin:.5rem 0 .4rem">🙃 REY/REINA DE LA INVERSA</div>
+  ${(selLg?[selLg]:leagues).map(lg=>{
+    const lgMembers=lg.memberIds.map(mid=>STATE.participants.find(x=>x.id===mid)).filter(Boolean);
+    const lgInversas=Array.isArray(lg.inversas)?lg.inversas:[];
+    const inversaNames=lgInversas.map(cid=>STATE.participants.find(x=>x.id===cid)?.name).filter(Boolean);
+    return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .85rem;margin-bottom:.5rem">
+      <div style="font-size:.65rem;color:#889;margin-bottom:.5rem;font-weight:600">${lg.name}</div>
+      ${inversaNames.length?`<div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;padding:.45rem .6rem;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:9px;margin-bottom:.55rem">
+        <span style="font-size:1.2rem;display:inline-block;transform:rotate(180deg)">🏆</span>
+        <span style="font-size:.82rem;font-weight:700;color:#fca5a5;transform:rotate(180deg);display:inline-block">${inversaNames.join(" & ")}</span>
+        <span style="font-size:.62rem;color:#ef4444;flex:1">${inversaNames.length>1?"Team Inversa":"Rey/Reina de la Inversa"} 👑</span>
+        <button onclick="adminSetInversa('${lg.id}','CLEAR')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#889;font-size:.65rem;padding:.25rem .5rem;cursor:pointer">✕ Quitar todos</button>
+      </div>`:`<div style="font-size:.72rem;color:#556;margin-bottom:.5rem;font-style:italic">Nadie coronado aún... 🤔</div>`}
+      <div style="font-size:.6rem;color:#667;margin-bottom:.4rem">Toca para agregar/quitar del podio de la inversa:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.3rem">
+        ${lgMembers.map(p=>{
+          const isSel=lgInversas.includes(p.id);
+          const sb=isSel?"rgba(239,68,68,.4)":"rgba(255,255,255,.1)";
+          const sBg=isSel?"rgba(239,68,68,.15)":"rgba(255,255,255,.04)";
+          const sC=isSel?"#fca5a5":"#889";
+          const nm=isSel?"🙃 <span style=\"display:inline-block;transform:rotate(180deg)\">"+ p.name+"</span>":p.name;
+          return "<button onclick=\"adminSetInversa('"+lg.id+"','"+p.id+"')\" style=\"padding:4px 8px;border-radius:6px;border:1px solid "+sb+";background:"+sBg+";color:"+sC+";font-size:.68rem;cursor:pointer\">"+nm+"</button>";
+        }).join("")}
+      </div>
+    </div>`;
   }).join("")}`:""}`;
+}
+
+function adminSetInversa(lgId, pid){
+  const lg=STATE.leagues.find(l=>l.id===lgId);
+  if(!lg) return;
+  if(!Array.isArray(lg.inversas)) lg.inversas=[];
+  if(pid==='CLEAR'){
+    lg.inversas=[];
+    showFlash("😅 Coronas de la inversa retiradas");
+  } else {
+    const idx=lg.inversas.indexOf(pid);
+    if(idx>=0){
+      lg.inversas.splice(idx,1);
+      const p=STATE.participants.find(x=>x.id===pid);
+      showFlash("😅 "+p?.name+" ya no es el Rey de la Inversa");
+    } else {
+      lg.inversas.push(pid);
+      const p=STATE.participants.find(x=>x.id===pid);
+      showFlash("🙃 ¡"+p?.name+" coronado/a Rey de la Inversa!");
+    }
+  }
+  fbWriteLeague(lgId);
+  go("admin",{tab:"stats",statsLgId:ROUTE.statsLgId||""});
 }
 
 function adminSetCrybaby(lgId, pid){
