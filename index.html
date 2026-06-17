@@ -750,27 +750,83 @@ function makeMatches(){
 }
 const MATCHES=makeMatches();
 
-// Official kickoff times in UTC (EDT = UTC-4)
+// Official kickoff times in UTC — verified against FIFA 2026 schedule (kickoffclock.com CSV)
 const MATCH_UTC={
-  1:"2026-06-11T19:00Z",2:"2026-06-12T02:00Z",
-  3:"2026-06-13T01:00Z",4:"2026-06-12T19:00Z",
-  5:"2026-06-13T19:00Z",6:"2026-06-13T22:00Z",7:"2026-06-14T01:00Z",8:"2026-06-13T04:00Z",
-  9:"2026-06-14T17:00Z",10:"2026-06-14T23:00Z",11:"2026-06-14T20:00Z",12:"2026-06-15T02:00Z",
-  13:"2026-06-15T19:00Z",14:"2026-06-16T01:00Z",15:"2026-06-15T16:00Z",16:"2026-06-15T22:00Z",
-  17:"2026-06-16T19:00Z",18:"2026-06-17T01:00Z",19:"2026-06-16T22:00Z",20:"2026-06-16T16:00Z",
-  21:"2026-06-17T16:00Z",22:"2026-06-17T22:00Z",23:"2026-06-17T19:00Z",24:"2026-06-18T01:00Z",
-  25:"2026-06-18T16:00Z",26:"2026-06-19T01:00Z",27:"2026-06-18T19:00Z",28:"2026-06-18T22:00Z",
-  29:"2026-06-19T22:00Z",30:"2026-06-20T01:00Z",31:"2026-06-19T19:00Z",32:"2026-06-19T16:00Z",
-  33:"2026-06-20T20:00Z",34:"2026-06-21T00:00Z",35:"2026-06-20T17:00Z",36:"2026-06-20T23:00Z",
-  37:"2026-06-21T19:00Z",38:"2026-06-22T01:00Z",39:"2026-06-21T16:00Z",40:"2026-06-21T22:00Z",
-  41:"2026-06-22T19:00Z",42:"2026-06-23T01:00Z",43:"2026-06-22T22:00Z",44:"2026-06-22T16:00Z",
-  45:"2026-06-23T16:00Z",46:"2026-06-23T22:00Z",47:"2026-06-23T19:00Z",48:"2026-06-24T01:00Z",
-  49:"2026-06-25T01:00Z",50:"2026-06-25T01:00Z",51:"2026-06-24T19:00Z",52:"2026-06-24T19:00Z",
-  53:"2026-06-25T02:00Z",54:"2026-06-25T02:00Z",55:"2026-06-25T22:00Z",56:"2026-06-25T22:00Z",
-  57:"2026-06-25T20:00Z",58:"2026-06-25T20:00Z",59:"2026-06-26T01:00Z",60:"2026-06-26T01:00Z",
-  61:"2026-06-26T23:00Z",62:"2026-06-26T23:00Z",63:"2026-06-26T20:00Z",64:"2026-06-26T20:00Z",
-  65:"2026-06-27T01:00Z",66:"2026-06-27T01:00Z",67:"2026-06-27T22:00Z",68:"2026-06-27T22:00Z",
-  69:"2026-06-27T19:00Z",70:"2026-06-27T19:00Z",71:"2026-06-28T01:00Z",72:"2026-06-28T01:00Z",
+  // ── Round 1 ──
+  1:"2026-06-11T19:00Z",  // México vs Sudáfrica
+  2:"2026-06-12T02:00Z",  // Corea del Sur vs Chequia
+  3:"2026-06-13T01:00Z",  // EE.UU. vs Paraguay
+  4:"2026-06-12T19:00Z",  // Canadá vs Bosnia-Herz.
+  5:"2026-06-13T19:00Z",  // Qatar vs Suiza
+  6:"2026-06-13T22:00Z",  // Brasil vs Marruecos
+  7:"2026-06-14T01:00Z",  // Haití vs Escocia
+  8:"2026-06-14T16:00Z",  // Australia vs Turquía
+  9:"2026-06-14T17:00Z",  // Alemania vs Curazao
+  10:"2026-06-14T23:00Z", // C. de Marfil vs Ecuador
+  11:"2026-06-14T20:00Z", // Países Bajos vs Japón
+  12:"2026-06-15T02:00Z", // Suecia vs Túnez
+  13:"2026-06-15T19:00Z", // Bélgica vs Egipto
+  14:"2026-06-16T01:00Z", // Irán vs Nueva Zelanda
+  15:"2026-06-15T16:00Z", // España vs Cabo Verde
+  16:"2026-06-15T22:00Z", // Arabia Saudita vs Uruguay
+  17:"2026-06-16T19:00Z", // Francia vs Senegal
+  18:"2026-06-16T22:00Z", // Irak vs Noruega
+  19:"2026-06-17T01:00Z", // Argentina vs Argelia
+  20:"2026-06-17T04:00Z", // Austria vs Jordania
+  21:"2026-06-17T17:00Z", // Portugal vs R.D. Congo
+  22:"2026-06-18T02:00Z", // Uzbekistán vs Colombia
+  23:"2026-06-17T20:00Z", // Inglaterra vs Croacia
+  24:"2026-06-17T23:00Z", // Ghana vs Panamá
+  // ── Round 2 ──
+  25:"2026-06-18T16:00Z", // Chequia vs Sudáfrica
+  26:"2026-06-19T01:00Z", // México vs Corea del Sur
+  27:"2026-06-18T19:00Z", // Suiza vs Bosnia-Herz.
+  28:"2026-06-18T22:00Z", // Canadá vs Qatar
+  29:"2026-06-19T22:00Z", // Escocia vs Marruecos
+  30:"2026-06-20T00:30Z", // Brasil vs Haití
+  31:"2026-06-19T19:00Z", // EE.UU. vs Australia
+  32:"2026-06-20T03:00Z", // Turquía vs Paraguay
+  33:"2026-06-20T20:00Z", // Alemania vs C. de Marfil
+  34:"2026-06-21T00:00Z", // Ecuador vs Curazao
+  35:"2026-06-20T17:00Z", // Países Bajos vs Suecia
+  36:"2026-06-21T04:00Z", // Túnez vs Japón
+  37:"2026-06-21T19:00Z", // Bélgica vs Irán
+  38:"2026-06-22T01:00Z", // Nueva Zelanda vs Egipto
+  39:"2026-06-21T16:00Z", // España vs Arabia Saudita
+  40:"2026-06-21T22:00Z", // Uruguay vs Cabo Verde
+  41:"2026-06-22T21:00Z", // Francia vs Irak
+  42:"2026-06-23T00:00Z", // Noruega vs Senegal
+  43:"2026-06-22T17:00Z", // Argentina vs Austria
+  44:"2026-06-23T03:00Z", // Jordania vs Argelia
+  45:"2026-06-23T17:00Z", // Portugal vs Uzbekistán
+  46:"2026-06-24T02:00Z", // Colombia vs R.D. Congo
+  47:"2026-06-23T20:00Z", // Inglaterra vs Ghana
+  48:"2026-06-23T23:00Z", // Panamá vs Croacia
+  // ── Round 3 (simultaneous pairs) ──
+  49:"2026-06-25T01:00Z", // Sudáfrica vs Corea del Sur
+  50:"2026-06-25T01:00Z", // Chequia vs México
+  51:"2026-06-24T19:00Z", // Suiza vs Canadá
+  52:"2026-06-24T19:00Z", // Bosnia-Herz. vs Qatar
+  53:"2026-06-24T22:00Z", // Escocia vs Brasil
+  54:"2026-06-24T22:00Z", // Marruecos vs Haití
+  55:"2026-06-26T02:00Z", // Turquía vs EE.UU.
+  56:"2026-06-26T02:00Z", // Paraguay vs Australia
+  57:"2026-06-25T20:00Z", // Ecuador vs Alemania
+  58:"2026-06-25T20:00Z", // Curazao vs C. de Marfil
+  59:"2026-06-25T23:00Z", // Japón vs Suecia
+  60:"2026-06-25T23:00Z", // Túnez vs Países Bajos
+  61:"2026-06-27T03:00Z", // Egipto vs Irán
+  62:"2026-06-27T03:00Z", // Nueva Zelanda vs Bélgica
+  63:"2026-06-27T00:00Z", // Cabo Verde vs Arabia Saudita
+  64:"2026-06-27T00:00Z", // Uruguay vs España
+  65:"2026-06-26T19:00Z", // Noruega vs Francia
+  66:"2026-06-26T19:00Z", // Senegal vs Irak
+  67:"2026-06-28T02:00Z", // Argelia vs Austria
+  68:"2026-06-28T02:00Z", // Jordania vs Argentina
+  69:"2026-06-27T23:30Z", // Colombia vs Portugal
+  70:"2026-06-27T23:30Z", // R.D. Congo vs Uzbekistán
+  71:"2026-06-27T21:00Z", // Panamá vs Inglaterra
+  72:"2026-06-27T21:00Z", // Croacia vs Ghana
 };
 function matchTime(mid){
   const iso=MATCH_UTC[mid];if(!iso)return"";
