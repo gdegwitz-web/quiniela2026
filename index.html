@@ -1103,12 +1103,14 @@ function scoreKODetail(pred){
 function scoreGroupAdvancement(pred){
   try{
     const actuals=STATE.actuals||{};
-    // Only score once ALL 48 group stage matches are complete
+    const enabled=(actuals._koEnabled)||{};
+    // Requires: all group matches played AND admin enabled groupAdv
     const groupMatches=MATCHES.filter(m=>m.g!=="KO");
     const playedMatches=groupMatches.filter(m=>{
       const a=actuals[m.id]; return a&&a.h!==""&&a.a!=="";
     }).length;
     if(playedMatches<groupMatches.length) return 0;
+    if(!enabled.groupAdv) return 0;
 
     // Build brackets to get R32 teams
     const Bpred=buildBracket(pred.groups||{},pred.ko||{});
@@ -1574,12 +1576,10 @@ function bracketSVG(pid,pred,actualKO){
   const readonly=(pid==="view");
   const aKO=actualKO||{}; // actual KO results for point display
 
-  // Build set of actual R32 qualifiers for +8 badges
+  // Build set of actual R32 qualifiers for +8 badges (only when admin enabled groupAdv)
   let actualR32teams=new Set();
-  if(aKO._r32teams){
-    // pre-computed
-    actualR32teams=new Set(aKO._r32teams);
-  } else {
+  const groupAdvEnabled=!!(STATE.actuals&&STATE.actuals._koEnabled&&STATE.actuals._koEnabled.groupAdv);
+  if(groupAdvEnabled){
     try{
       const Bactual=buildBracket(STATE.actuals||{},aKO);
       if(Bactual&&Bactual.r32){
@@ -3208,10 +3208,11 @@ function pgAdmin(tab){
       <div style="font-size:.6rem;letter-spacing:1.5px;color:#667;font-weight:700;margin-bottom:6px">🔓 HABILITAR RONDAS PARA PUNTAJE</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${[
-          {key:"r32", label:"16vos"},
-          {key:"r16", label:"Octavos"},
-          {key:"qf",  label:"Cuartos"},
-          {key:"sf",  label:"Semis + Final"},
+          {key:"groupAdv", label:"Clasificados R32 (+8)"},
+          {key:"r32",  label:"16vos (+10)"},
+          {key:"r16",  label:"Octavos (+15)"},
+          {key:"qf",   label:"Cuartos (+20)"},
+          {key:"sf",   label:"Semis + Final (+30/40)"},
         ].map(({key,label})=>{
           const enabled=!!((STATE.actuals&&STATE.actuals._koEnabled)||{})[key];
           return `<button onclick="adminToggleKORound('${key}')"
@@ -4769,7 +4770,7 @@ function adminToggleKORound(key){
   if(!STATE.actuals._koEnabled) STATE.actuals._koEnabled={};
   STATE.actuals._koEnabled[key]=!STATE.actuals._koEnabled[key];
   fbWriteActuals();
-  const label={r32:"16vos",r16:"Octavos",qf:"Cuartos",sf:"Semis + Final"}[key];
+  const label={groupAdv:"Clasificados R32 (+8)",r32:"16vos",r16:"Octavos",qf:"Cuartos",sf:"Semis + Final"}[key];
   showFlash((STATE.actuals._koEnabled[key]?"✅ ":"⏸ ")+(label||key)+" "+(STATE.actuals._koEnabled[key]?"habilitado — ya suma puntos":"deshabilitado"));
   go("admin",{tab:"results",grp:"KO"});
 }
