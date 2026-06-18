@@ -146,9 +146,11 @@ button:hover{opacity:.85}
 .br-team{cursor:pointer}
 .br-team rect{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.14);stroke-width:1;rx:4}
 .br-team.win rect{fill:rgba(0,200,83,.14);stroke:#00c853;stroke-width:1.5}
+.br-team.actual-win rect{fill:rgba(0,200,83,.22);stroke:#00e676;stroke-width:2}
 .br-team.tbd rect{fill:rgba(255,255,255,.03);stroke:rgba(255,255,255,.07);stroke-width:.8}
 .br-team text{font-family:Arial,sans-serif;font-size:9px;fill:#ccc}
 .br-team.win text{fill:#00e676;font-weight:700}
+.br-team.actual-win text{fill:#fff;font-weight:700}
 .br-team.tbd text{fill:#555;font-style:italic}
 .br-line{stroke:rgba(255,255,255,.15);stroke-width:1;fill:none}
 .br-rlbl{font-family:Arial,sans-serif;font-size:8.5px;fill:#ffc800;font-weight:700;letter-spacing:1px}
@@ -958,7 +960,6 @@ function pickAdminKO(round,matchId,team){
 }
 
 function saveKOResult(round, idx, team){
-  snapshotRankings();
   if(!STATE.actuals._ko) STATE.actuals._ko={};
   if(!STATE.actuals._ko[round]) STATE.actuals._ko[round]={};
   if(team) STATE.actuals._ko[round][idx]=team;
@@ -1381,7 +1382,6 @@ function fbWriteParticipant(pid){
 
 // Write ONLY actuals (match results) to Firebase — admin only
 function snapshotRankings(){
-  // Called before actuals change — saves current rankings per league as "previous"
   if(!STATE.actuals) STATE.actuals={};
   const snap={};
   STATE.leagues.forEach(lg=>{
@@ -1392,6 +1392,8 @@ function snapshotRankings(){
     scored.forEach((m,i)=>{ snap[lg.id][m.pid]=i+1; });
   });
   STATE.actuals._rankSnap=snap;
+  // Store date so arrows are only shown relative to this reference day
+  STATE.actuals._rankSnapDate=new Date().toISOString().slice(0,10);
 }
 
 function fbWriteActuals(){
@@ -1565,11 +1567,26 @@ function adminBracketSVG(){
   return bracketSVG("admin",{groups:realGroups,ko});
 }
 
-function bracketSVG(pid,pred){
+function bracketSVG(pid,pred,actualKO){
   const ko=pred.ko||{};
   const B=buildBracket(pred.groups||{},ko);
   const isAdmin=(pid==="admin");
   const readonly=(pid==="view");
+  const aKO=actualKO||{}; // actual KO results for point display
+
+  // Build set of actual R32 qualifiers for +8 badges
+  let actualR32teams=new Set();
+  if(aKO._r32teams){
+    // pre-computed
+    actualR32teams=new Set(aKO._r32teams);
+  } else {
+    try{
+      const Bactual=buildBracket(STATE.actuals||{},aKO);
+      if(Bactual&&Bactual.r32){
+        Bactual.r32.forEach(function(m){if(m.h)actualR32teams.add(m.h);if(m.a)actualR32teams.add(m.a);});
+      }
+    }catch(e){}
+  }
 
   // Dimensions
   const TW=70,TH=26,GAP=5,RGAP=40;
@@ -1602,37 +1619,55 @@ function bracketSVG(pid,pred){
   });
 
   // Draw a match box
-  function drawMatch(rid,mid,x,y,h,a,winner,hLbl,aLbl){
+  function drawMatch(rid,mid,x,y,h,a,winner,hLbl,aLbl,actualWinner,pts){
     const isWin_h=winner===h&&h;
     const isWin_a=winner===a&&a;
-    const hCls=h?(isWin_h?"win":""):("tbd");
-    const aCls=a?(isWin_a?"win":""):("tbd");
+    const hitH=actualWinner&&h&&actualWinner===h; // actual result confirms h
+    const hitA=actualWinner&&a&&actualWinner===a;
+    const missH=actualWinner&&h&&actualWinner!==h&&isWin_h; // picked h but wrong
+    const missA=actualWinner&&a&&actualWinner!==a&&isWin_a;
+    const hCls=h?(hitH?"win actual-win":isWin_h?"win":""):("tbd");
+    const aCls=a?(hitA?"win actual-win":isWin_a?"win":""):("tbd");
     const hTxt=h?trunc(h,9):"TBD";
     const aTxt=a?trunc(a,9):"TBD";
     const clickH=(!readonly&&h)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${h}')`:`pickBracket('${pid}','${rid}',${mid},'${h}')`}"`:""
     const clickA=(!readonly&&a)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${a}')`:`pickBracket('${pid}','${rid}',${mid},'${a}')`}"`:""
+    const ptsLabel=(pts&&readonly)? // only show pts label in view mode
+      (hitH&&isWin_h?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${pts}</text>`:"")
+      +((hitA&&isWin_a)?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${pts}</text>`:"")
+      +(missH?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
+      +(missA?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
+      :"";
+    // +8 badges for correctly predicted R32 qualifiers
+    const adv8=(readonly&&rid==="r32"&&actualR32teams.size>0);
+    const adv8Label=adv8?(
+      (h&&actualR32teams.has(h)?`<text x="${x+2}" y="${y+TH/2+4}" font-size="6" text-anchor="start" fill="#ffd580" font-weight="bold">+8</text>`:"")
+      +(a&&actualR32teams.has(a)?`<text x="${x+2}" y="${y+TH+2+TH/2+4}" font-size="6" text-anchor="start" fill="#ffd580" font-weight="bold">+8</text>`:"")
+    ):"";
     let s="";
     const cx=x+TW/2; // horizontal center
     // Home
     s+=`<g class="br-team ${hCls}" ${clickH}>
       <rect x="${x}" y="${y}" width="${TW}" height="${TH}" rx="3"/>
       ${hLbl&&rid==="r32"
-        ? `<text x="${cx}" y="${y+TH/2-1}" font-size="9.5" text-anchor="middle">${hTxt}${isWin_h?" ✓":""}</text>
+        ? `<text x="${cx}" y="${y+TH/2-1}" font-size="9.5" text-anchor="middle">${hTxt}</text>
            <text x="${cx}" y="${y+TH/2+8}" font-size="6.5" text-anchor="middle" fill="rgba(255,255,255,.38)">${hLbl}</text>`
-        : `<text x="${cx}" y="${y+TH/2+3.5}" font-size="9.5" text-anchor="middle">${hTxt}${isWin_h?" ✓":""}</text>`
+        : `<text x="${cx}" y="${y+TH/2+3.5}" font-size="9.5" text-anchor="middle">${hTxt}</text>`
       }
     </g>`;
     // Away
     s+=`<g class="br-team ${aCls}" ${clickA}>
       <rect x="${x}" y="${y+TH+2}" width="${TW}" height="${TH}" rx="3"/>
       ${aLbl&&rid==="r32"
-        ? `<text x="${cx}" y="${y+TH+2+TH/2-1}" font-size="9.5" text-anchor="middle">${aTxt}${isWin_a?" ✓":""}</text>
+        ? `<text x="${cx}" y="${y+TH+2+TH/2-1}" font-size="9.5" text-anchor="middle">${aTxt}</text>
            <text x="${cx}" y="${y+TH+2+TH/2+8}" font-size="6.5" text-anchor="middle" fill="rgba(255,255,255,.38)">${aLbl}</text>`
-        : `<text x="${cx}" y="${y+TH+2+TH/2+3.5}" font-size="9.5" text-anchor="middle">${aTxt}${isWin_a?" ✓":""}</text>`
+        : `<text x="${cx}" y="${y+TH+2+TH/2+3.5}" font-size="9.5" text-anchor="middle">${aTxt}</text>`
       }
     </g>`;
     // divider
     s+=`<line x1="${x+1}" y1="${y+TH+1}" x2="${x+TW-1}" y2="${y+TH+1}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
+    // points badges
+    s+=ptsLabel+adv8Label;
     return s;
   }
 
@@ -1703,13 +1738,18 @@ function bracketSVG(pid,pred){
     {rid:"sf", matches:B.sf.slice(1,2), winners:B.sfw, n:1,col:5},
   ];
 
+  // Points per round for view mode badges
+  const roundPts={r32:10,r16:15,qf:20,sf:30,final:40,f3:20};
+
   function renderSide(data){
     data.forEach(({rid,matches,winners,n,col})=>{
       const x=cxs[col];
+      const actualRound=aKO[rid]||{};
       matches.forEach((m,i)=>{
         const y=matchY(col,i,n);
         const w=winners[m.id]||null;
-        svg+=drawMatch(rid,m.id,x,y,m.h,m.a,w,m.hLbl||"",m.aLbl||"");
+        const actualW=actualRound[m.id]||null;
+        svg+=drawMatch(rid,m.id,x,y,m.h,m.a,w,m.hLbl||"",m.aLbl||"",actualW,roundPts[rid]);
       });
     });
   }
@@ -1751,11 +1791,11 @@ function bracketSVG(pid,pred){
 
   // Final label
   svg+=`<text class="br-rlbl" x="${centerX+TW/2}" y="${finY-6}" text-anchor="middle" fill="#ffc800">⚽ FINAL</text>`;
-  svg+=drawMatch("final",0,centerX,finY,finW,finA,finWin);
+  svg+=drawMatch("final",0,centerX,finY,finW,finA,finWin,"","",aKO.final?aKO.final[0]:null,40);
 
   // 3rd place label
   svg+=`<text class="br-rlbl" x="${centerX+TW/2}" y="${f3Y-6}" text-anchor="middle" fill="#cd7f32">🥉 3ER LUGAR</text>`;
-  svg+=drawMatch("f3",0,centerX,f3Y,f3W,f3A,f3Win);
+  svg+=drawMatch("f3",0,centerX,f3Y,f3W,f3A,f3Win,"","",aKO.f3?aKO.f3[0]:null,20);
 
   // Champion banner
   if(B.champion){
@@ -1797,7 +1837,7 @@ function bracketSVG(pid,pred){
     <div id="bracket-wrap" style="overflow-x:auto;padding:.5rem 28px;-webkit-overflow-scrolling:touch">
     ${thirdsPanel}
     <p style="font-size:.72rem;color:#667;margin:.3rem 0 .5rem">Toca un equipo para seleccionarlo como ganador.</p>
-    ${pid!=="admin"?`<button class="btn-red" style="padding:.35rem .7rem;font-size:.72rem;width:auto;margin-bottom:.5rem" onclick="clearBracket('${pid}')">🗑️ Limpiar bracket</button>`:""}
+    ${pid!=="admin"&&pid!=="view"?`<button class="btn-red" style="padding:.35rem .7rem;font-size:.72rem;width:auto;margin-bottom:.5rem" onclick="clearBracket('${pid}')">🗑️ Limpiar bracket</button>`:""}
     ${svg}
     </div>
   </div>`;
@@ -2702,78 +2742,43 @@ function pgMyScore(pid){
     let indivHtml="";
     if(!showLiga){
       if(grp==="KO"){
-        // KO bracket view (read-only)
         const ko=pred.ko||{};
-        const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
-        // Guard: only show KO results after group stage is complete
-        const groupMatches2=MATCHES.filter(m=>m.g!=="KO");
-        const playedGrps=groupMatches2.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
-        const groupsDone2=playedGrps>=groupMatches2.length;
-        const r32E=Object.keys(aKO.r32||{}).length;
-        const r16E=Object.keys(aKO.r16||{}).length;
-        const qfE =Object.keys(aKO.qf||{}).length;
-        const sfE =Object.keys(aKO.sf||{}).length;
-        const now2=new Date();
-        const enabled2=(STATE.actuals&&STATE.actuals._koEnabled)||{};
-        const canR32=groupsDone2&&!!enabled2.r32;
-        const canR16=canR32&&r32E>=16&&!!enabled2.r16;
-        const canQF =canR16&&r16E>=8 &&!!enabled2.qf;
-        const canFin=canQF &&qfE>=4&&sfE>=2&&!!enabled2.sf;
-        const roundCanScore={r32:canR32,r16:canR16,qf:canQF,sf:canFin};
+        const aKO2=(STATE.actuals&&STATE.actuals._ko)||{};
+        const enabled2b=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+        const groupMatchesKO=MATCHES.filter(m=>m.g!=="KO");
+        const playedGrpsKO=groupMatchesKO.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
+        const grpsDoneKO=playedGrpsKO>=groupMatchesKO.length;
+        const r32EK=Object.keys(aKO2.r32||{}).length;
+        const r16EK=Object.keys(aKO2.r16||{}).length;
+        const qfEK =Object.keys(aKO2.qf||{}).length;
+        const sfEK =Object.keys(aKO2.sf||{}).length;
+        const canR32K=grpsDoneKO&&!!enabled2b.r32;
+        const canR16K=canR32K&&r32EK>=16&&!!enabled2b.r16;
+        const canQFK =canR16K&&r16EK>=8 &&!!enabled2b.qf;
+        const canFinK=canQFK &&qfEK>=4&&sfEK>=2&&!!enabled2b.sf;
         const safeAKO={
-          r32:canR32?aKO.r32||{}:{},
-          r16:canR16?aKO.r16||{}:{},
-          qf: canQF ?aKO.qf||{}:{},
-          sf: canFin?aKO.sf||{}:{},
-          final:canFin?aKO.final||{}:{},
-          f3:  canFin?aKO.f3||{}:{}
+          r32:canR32K?aKO2.r32||{}:{},
+          r16:canR16K?aKO2.r16||{}:{},
+          qf: canQFK ?aKO2.qf||{}:{},
+          sf: canFinK?aKO2.sf||{}:{},
+          final:canFinK?aKO2.final||{}:{},
+          f3:  canFinK?aKO2.f3||{}:{}
         };
+
         const gPts=scoreGroups(pred.groups||{},STATE.actuals||{});
         const kPts=scoreKO(pred);
         const gAdvPts2=scoreGroupAdvancement(pred);
-        let B=null;try{B=buildBracket(pred.groups||{},ko);}catch(e){}
-        const rounds=[
-          {key:"r32",label:"16VOS → Octavos",pts:10,matches:B?B.r32:[]},
-          {key:"r16",label:"Octavos → Cuartos",pts:15,matches:B?B.r16:[]},
-          {key:"qf", label:"Cuartos → Semis",pts:20,matches:B?B.qf:[]},
-          {key:"sf", label:"Semis → Final",pts:30,matches:B?B.sf:[]},
-        ];
-        let html=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+
+        indivHtml=`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
           <div><div style="font-size:.6rem;color:#889;letter-spacing:1px">TOTAL</div><div style="font-size:1.3rem;font-weight:700;color:#ffc800">${gPts+gAdvPts2+kPts} pts</div></div>
           <div style="width:1px;background:rgba(255,255,255,.1);align-self:stretch"></div>
           <div><div style="font-size:.6rem;color:#889">GRUPOS</div><div style="font-size:.9rem;font-weight:700;color:#4de0a0">+${gPts}</div></div>
-          <div><div style="font-size:.6rem;color:#889">CLASIF.</div><div style="font-size:.9rem;font-weight:700;color:#ffd580">+${gAdvPts2}</div></div>
+          <div title="Equipos clasificados correctamente"><div style="font-size:.6rem;color:#889">CLASIF. +8</div><div style="font-size:.9rem;font-weight:700;color:#ffd580">+${gAdvPts2}</div></div>
           <div><div style="font-size:.6rem;color:#889">FASE FINAL</div><div style="font-size:.9rem;font-weight:700;color:#88aaff">+${kPts}</div></div>
+        </div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">
+          ${bracketSVG("view",pred,safeAKO)}
         </div>`;
-        rounds.forEach(r=>{
-          const pick=ko[r.key]||{};const actual=safeAKO[r.key]||{};
-          const picksExist=Object.keys(pick).length>0;const actualsExist=Object.keys(actual).length>0;
-          if(!picksExist&&!actualsExist) return;
-          const pickEntries=Object.entries(pick).sort((a,b)=>+a[0]-+b[0]);
-          html+=`<div style="margin-bottom:.8rem"><div style="font-size:.62rem;letter-spacing:1.5px;color:#88aaff;font-weight:700;margin-bottom:.35rem">${r.label} <span style="color:#667">+${r.pts} c/u</span>${actualsExist?`<span style="float:right;color:#889;font-weight:400">${pickEntries.filter(([i,t])=>actual[i]===t).length}/${pickEntries.length} ✓</span>`:''}</div>`;
-          html+=`<div style="display:flex;flex-wrap:wrap;gap:.3rem">`;
-          pickEntries.forEach(([idx,team])=>{
-            if(!team) return;
-            const isCorrect=actual[idx]&&team===actual[idx];const isWrong=actual[idx]&&team!==actual[idx];
-            html+=`<div style="background:${isCorrect?'rgba(0,200,83,.12)':isWrong?'rgba(255,80,80,.08)':'rgba(255,255,255,.05)'};border:1px solid ${isCorrect?'rgba(0,200,83,.3)':isWrong?'rgba(255,80,80,.2)':'rgba(255,255,255,.1)'};border-radius:6px;padding:3px 8px;font-size:.72rem;color:${isCorrect?'#4de0a0':isWrong?'#ff8080':'#eee'}">${f(team)} ${team}${isCorrect?' ✓':isWrong?' ✗':''}</div>`;
-          });
-          html+=`</div></div>`;
-        });
-        // Podio
-        const champ=(ko.final||{})[0];const sf0=(ko.sf||{})[0],sf1=(ko.sf||{})[1];
-        const runner=(ko.final||{})[1]||(champ&&sf0&&sf1?(champ===sf0?sf1:champ===sf1?sf0:null):null);
-        const third=(ko.f3||{})[0];
-        if(champ||runner||third){
-          html+=`<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.15);border-radius:10px;padding:.6rem .8rem;margin-bottom:.5rem">
-            <div style="font-size:.62rem;letter-spacing:1.5px;color:#ffc800;font-weight:700;margin-bottom:.5rem">🏆 TU PODIO</div>
-            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-              ${champ?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#ffc800;margin-bottom:2px">Campeón</div><div style="font-size:.85rem">${f(champ)}</div><div style="font-size:.7rem;color:#eee">${champ}</div></div>`:""}
-              ${runner?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#b0b0b0;margin-bottom:2px">Subcampeón</div><div style="font-size:.85rem">${f(runner)}</div><div style="font-size:.7rem;color:#eee">${runner}</div></div>`:""}
-              ${third?`<div style="flex:1;min-width:80px;text-align:center"><div style="font-size:.6rem;color:#cd7f32;margin-bottom:2px">3er Lugar</div><div style="font-size:.85rem">${f(third)}</div><div style="font-size:.7rem;color:#eee">${third}</div></div>`:""}
-            </div>
-          </div>`;
-        }
-        indivHtml=html;
       } else {
         // Group view: matches with user predictions + standings
         const grpMs=MATCHES.filter(m=>m.g===grp);
@@ -2914,6 +2919,11 @@ function lgScore(pid){
 function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
   const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
+  // Only show position changes if snapshot was taken today or yesterday
+  const snapDate=STATE.actuals&&STATE.actuals._rankSnapDate;
+  const today=new Date().toISOString().slice(0,10);
+  const yesterday=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const snapValid=snapDate===today||snapDate===yesterday;
   const crybabies=Array.isArray(lg.crybabies)?lg.crybabies:lg.crybaby?[lg.crybaby]:[];
   const inversas=Array.isArray(lg.inversas)?lg.inversas:[];
   const scored=lg.memberIds
@@ -2935,11 +2945,11 @@ function lgRankHTML(lg, myPid){
     const isCrybaby=crybabies.includes(m.pid);
     const isInversa=inversas.includes(m.pid);
     let moveBadge="";
-    if(prevPos&&prevPos!==curPos){
+    if(snapValid&&prevPos&&prevPos!==curPos){
       const diff=prevPos-curPos;
       if(diff>0) moveBadge="<span style='font-size:.6rem;font-weight:700;color:#00c853;background:rgba(0,200,83,.12);border-radius:4px;padding:1px 4px;flex-shrink:0'>&#9650;"+diff+"</span>";
       else moveBadge="<span style='font-size:.6rem;font-weight:700;color:#ff6060;background:rgba(255,80,80,.1);border-radius:4px;padding:1px 4px;flex-shrink:0'>&#9660;"+Math.abs(diff)+"</span>";
-    } else if(prevPos&&prevPos===curPos){
+    } else if(snapValid&&prevPos&&prevPos===curPos){
       moveBadge="<span style='font-size:.58rem;color:#445;flex-shrink:0'>—</span>";
     }
     const bg=isCrybaby?"rgba(99,102,241,.1)":isInversa?"rgba(239,68,68,.08)":m.isMe?"rgba(255,200,0,.09)":"rgba(255,255,255,.04)";
@@ -3230,6 +3240,10 @@ function pgAdmin(tab){
       </div>`;}).join("")}
     <div id="ast-${grp}">${stTable(calcStandings(grp,STATE.actuals||{}))}</div>
     <button class="btn-green" onclick="saveActuals()">💾 GUARDAR RESULTADOS</button>
+    <button onclick="adminSaveRankSnap()" style="background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;border-radius:8px;padding:.5rem .9rem;font-size:.75rem;font-weight:700;cursor:pointer;margin-top:.4rem;width:100%">
+      📸 GUARDAR REFERENCIA DE POSICIONES
+      ${STATE.actuals&&STATE.actuals._rankSnapDate?`<span style="font-weight:400;color:#667;font-size:.68rem"> · última: ${STATE.actuals._rankSnapDate}</span>`:""}
+    </button>
     `}
   </div>`:""}
   ${tab==="participants"?`<div class="card">
@@ -4087,10 +4101,16 @@ function clearBracket(pid){
 
 
 function saveActuals(){
-  // Admin only — snapshot current rankings first, then write
-  snapshotRankings();
   const gl=document.getElementById("agl");
   fbWriteActuals();showFlash("✓ Resultados guardados");
+}
+
+function adminSaveRankSnap(){
+  snapshotRankings();
+  fbWriteActuals();
+  const d=STATE.actuals._rankSnapDate;
+  showFlash("📸 Referencia de posiciones guardada ("+d+")");
+  go("admin",{tab:"results",grp:ROUTE.grp||"A"});
 }
 
 function adminShowLocalData(){
