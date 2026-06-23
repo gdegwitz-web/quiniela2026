@@ -1389,8 +1389,8 @@ function snapshotRankings(){
   STATE.leagues.forEach(lg=>{
     snap[lg.id]={};
     const scored=lg.memberIds
-      .map(pid=>({pid,pts:lgScore(pid)}))
-      .sort((a,b)=>b.pts-a.pts);
+      .map(pid=>{const tb=tiebreakScore(pid);return Object.assign({pid},tb);})
+      .sort(cmpRank);
     scored.forEach((m,i)=>{ snap[lg.id][m.pid]=i+1; });
   });
   STATE.actuals._rankSnap=snap;
@@ -2916,6 +2916,26 @@ function lgScore(pid){
   return scoreFull(pid);
 }
 
+// ── Central tiebreaker: pts → group pts → exactos → submittedAt (earlier = better) ──
+function tiebreakScore(pid){
+  const pred=STATE.predictions[pid]||{};
+  const actuals2=STATE.actuals||{};
+  let exact=0,gpts=0;
+  MATCHES.forEach(function(m){
+    const pr=(pred.groups||{})[m.id],ac=actuals2[m.id];
+    if(!pr||pr.h===""||!ac||ac.h==="") return;
+    if(+pr.h===+ac.h&&+pr.a===+ac.a){exact++;gpts+=5;}
+    else{const r1=+pr.h>+pr.a?"H":+pr.h<+pr.a?"A":"D",r2=+ac.h>+ac.a?"H":+ac.h<+ac.a?"A":"D";if(r1===r2)gpts+=3;}
+  });
+  const submittedAt=pred.submittedAt?new Date(pred.submittedAt).getTime():Number.MAX_SAFE_INTEGER;
+  return {pts:lgScore(pid),gpts:gpts,exact:exact,submittedAt:submittedAt};
+}
+function cmpRank(a,b){
+  // 1° total pts desc, 2° group pts desc, 3° exactos desc, 4° submittedAt asc
+  return (b.pts-a.pts)||((b.gpts||0)-(a.gpts||0))||((b.exact||0)-(a.exact||0))||((a.submittedAt||0)-(b.submittedAt||0));
+}
+
+
 function lgRankHTML(lg, myPid){
   const medals=["🥇","🥈","🥉"];
   const snap=((STATE.actuals&&STATE.actuals._rankSnap)||{})[lg.id]||{};
@@ -2931,10 +2951,11 @@ function lgRankHTML(lg, myPid){
       const p=STATE.participants.find(function(x){return x.id===pid;});
       const qn=(STATE.predictions[pid]&&STATE.predictions[pid].quinName)||p&&p.name||"—";
       const sub=!!(STATE.predictions[pid]&&STATE.predictions[pid].submitted);
-      return {pid:pid,qn:qn,name:p?p.name:"—",pts:lgScore(pid),isMe:pid===myPid,sub:sub,hidden:!!(p&&p.hidden)};
+      const tb=tiebreakScore(pid);
+      return Object.assign({pid:pid,qn:qn,name:p?p.name:"—",isMe:pid===myPid,sub:sub,hidden:!!(p&&p.hidden)},tb);
     })
     .filter(function(m){return !m.hidden||m.isMe;})
-    .sort(function(a,b){return b.pts-a.pts||a.qn.localeCompare(b.qn);});
+    .sort(cmpRank);
   const crybabPs=crybabies.map(function(cid){return scored.find(function(m){return m.pid===cid;});}).filter(Boolean);
   const inversaPs=inversas.map(function(cid){return scored.find(function(m){return m.pid===cid;});}).filter(Boolean);
 
@@ -3302,6 +3323,7 @@ function pgAdmin(tab){
             <div style="font-weight:600;font-size:.85rem">${p.name}${p.hidden?` <span style="font-size:.6rem;color:#778;background:rgba(255,255,255,.07);border-radius:3px;padding:0 4px">OCULTO</span>`:""}</div>
             ${qn?`<div style="font-size:.66rem;color:#889">"${qn}"</div>`:""}
             <div style="font-size:.65rem;color:#556">${p.email||""} · ${sub?"✓ Enviada":"Pendiente"} · ${myLeagues.length} liga${myLeagues.length!==1?"s":""}</div>
+            ${sub&&STATE.predictions[p.id]?.submittedAt?`<div style="font-size:.62rem;color:#4de0a0">📅 ${(()=>{const d=new Date(STATE.predictions[p.id].submittedAt);return d.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});})()}</div>`:`<div style="font-size:.62rem;color:#556">${sub?"":"⏳ Sin enviar"}</div>`}
           </div>
           <button onclick="document.getElementById('${expandId}').classList.toggle('open')"
             style="background:rgba(255,200,0,.1);color:#ffc800;border:1px solid rgba(255,200,0,.25);border-radius:5px;padding:.22rem .48rem;font-size:.65rem;cursor:pointer;flex-shrink:0">🏅</button>
@@ -3370,7 +3392,10 @@ function pgAdmin(tab){
       const allPs=STATE.participants.filter(p=>!p.hidden);
       const members=lg.memberIds.map(pid=>STATE.participants.find(x=>x.id===pid)).filter(Boolean);
       const nonMembers=allPs.filter(p=>!lg.memberIds.includes(p.id));
-      const scored=members.map(p=>({...p,pts:lgScore(p.id)})).sort((a,b)=>b.pts-a.pts);
+      const scored=members.map(p=>{
+        const tb=tiebreakScore(p.id);
+        return {...p,...tb};
+      }).sort(cmpRank);
       const medals=["🥇","🥈","🥉"];
       const editId="lg-edit-"+lg.id;
       return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:12px;margin-bottom:.8rem;overflow:hidden">
@@ -3459,7 +3484,7 @@ function pgAdmin(tab){
     </div>
     ${ps.length?`<h2 style="margin-bottom:.4rem">RANKING</h2>
     ${ps.map(p=>({...p,pts:scoreFull(p.id)}))
-      .sort((a,b)=>b.pts-a.pts).map((p,i)=>{const m=["🥇","🥈","🥉"];return `<div class="p-item">
+      .sort((a,b)=>b.pts-a.pts||a.name.localeCompare(b.name)).map((p,i)=>{const m=["🥇","🥈","🥉"];return `<div class="p-item">
         <span style="width:20px">${m[i]||"#"+(i+1)}</span>
         <span style="flex:1;font-weight:600;font-size:.85rem">${p.name}</span>
         <span style="font-size:1.15rem;font-weight:700;color:#ffc800">${p.pts}<small style="font-size:.55rem;color:#555">pts</small></span>
@@ -3484,6 +3509,128 @@ function pgAdmin(tab){
 
   ${tab==="stats"?adminStats(ps, ROUTE.statsLgId):""}`;
 }
+
+function adminChartToggle(pid){
+  const selPids=(ROUTE.chartPids||[]).slice();
+  const idx=selPids.indexOf(pid);
+  const sub=(STATE.participants||[]).filter(function(p){return STATE.predictions[p.id]&&STATE.predictions[p.id].submitted&&!p.hidden;});
+  const allPids=sub.map(function(p){return p.id;});
+  let next;
+  if(selPids.length===0){
+    // all shown — deselect this one (show all except pid)
+    next=allPids.filter(function(x){return x!==pid;});
+  } else if(idx>=0){
+    // currently selected — remove it
+    next=selPids.filter(function(x){return x!==pid;});
+    if(next.length===0) next=[]; // empty = show all
+  } else {
+    // not selected — add it
+    next=selPids.concat([pid]);
+    if(next.length===allPids.length) next=[]; // all selected = reset
+  }
+  go('admin',{tab:'stats',statsLgId:ROUTE.statsLgId||'',chartPids:next});
+}
+
+function adminChartToggle(pid){
+  const ps2=(STATE.participants||[]).filter(function(p){return !p.hidden;});
+  const sub=ps2.filter(function(p){return STATE.predictions[p.id]&&STATE.predictions[p.id].submitted;});
+  const allPids=sub.map(function(p){return p.id;});
+  const current=ROUTE.chartPids&&ROUTE.chartPids.length>0?ROUTE.chartPids:allPids;
+  var next;
+  if(pid===''){next=[];}
+  else if(current.includes(pid)){
+    const removed=current.filter(function(x){return x!==pid;});
+    next=removed.length>0?removed:[];
+  } else {next=[...current,pid];}
+  const store=next.length===allPids.length?[]:next;
+  go('admin',{tab:'stats',statsLgId:ROUTE.statsLgId||'',chartPids:store});
+}
+
+function adminProgressChart(ps){
+  const actuals=STATE.actuals||{};
+  const played=MATCHES.filter(function(m){const a=actuals[m.id];return a&&a.h!==''&&a.a!=='';})
+    .sort(function(a,b){
+      const ta=MATCH_UTC[a.id]?new Date(MATCH_UTC[a.id]).getTime():0;
+      const tb=MATCH_UTC[b.id]?new Date(MATCH_UTC[b.id]).getTime():0;
+      return ta-tb;
+    });
+  if(played.length<2) return "<div style='padding:.8rem;text-align:center;font-size:.72rem;color:#445'>El gr\u00e1fico estar\u00e1 disponible cuando haya al menos 2 partidos jugados.</div>";
+  const dayMap={};
+  played.forEach(function(m){
+    const day=(MATCH_UTC[m.id]||'?').slice(0,10);
+    if(!dayMap[day])dayMap[day]=[];
+    dayMap[day].push(m);
+  });
+  const days=Object.keys(dayMap).sort();
+  const cumAct={};
+  const checkpoints=days.map(function(day){
+    dayMap[day].forEach(function(m){cumAct[m.id]=actuals[m.id];});
+    return {day:day,snap:Object.assign({},cumAct)};
+  });
+  const sub=ps.filter(function(p){return STATE.predictions[p.id]&&STATE.predictions[p.id].submitted;});
+  if(!sub.length) return '';
+  const COLORS=['#ffc800','#4de0a0','#88aaff','#ff8080','#c084fc','#fb923c','#34d399','#f472b6','#60a5fa','#a3e635'];
+  const allPids=sub.map(function(p){return p.id;});
+  const rawPids=ROUTE.chartPids;
+  const selPids=(rawPids&&rawPids.length>0)?rawPids:allPids;
+  const series=sub.map(function(p,i){
+    const positions=checkpoints.map(function(cp){
+      const scores=sub.map(function(q){
+        const qp=STATE.predictions[q.id]||{};
+        let ex=0,cor=0;
+        Object.keys(cp.snap).forEach(function(mid){
+          const pr=(qp.groups||{})[mid],ac=cp.snap[mid];
+          if(!pr||pr.h===""||!ac||ac.h==="")return;
+          if(+pr.h===+ac.h&&+pr.a===+ac.a)ex++;
+          else{const r1=+pr.h>+pr.a?"H":+pr.h<+pr.a?"A":"D",r2=+ac.h>+ac.a?"H":+ac.h<+ac.a?"A":"D";if(r1===r2)cor++;}
+        });
+        return {pid:q.id,pts:scoreGroups(qp.groups||{},cp.snap),exact:ex,correct:cor,name:q.name};
+      }).sort(cmpRank);
+      return scores.findIndex(function(x){return x.pid===p.id;})+1||sub.length;
+    });
+    return {pid:p.id,name:p.name,positions:positions,color:COLORS[i%COLORS.length],active:selPids.includes(p.id)};
+  });
+  const activeSeries=series.filter(function(s){return s.active;});
+  const nP=sub.length,n=checkpoints.length;
+  const W=340,H=200,pL=28,pR=18,pT=10,pB=32;
+  const cw=W-pL-pR,ch=H-pT-pB;
+  const xS=function(i){return pL+(n===1?cw/2:(i/(n-1))*cw);};
+  const yS=function(pos){return pT+(pos-1)/(nP-1||1)*ch;};
+  var svg="<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;max-width:"+W+"px;display:block'>";
+  for(var pos=1;pos<=nP;pos++){
+    const y=yS(pos);
+    svg+="<line x1='"+pL+"' y1='"+y+"' x2='"+(W-pR)+"' y2='"+y+"' stroke='rgba(255,255,255,"+(pos===1?".2":".06")+")' stroke-width='1' stroke-dasharray='"+(pos===1?"":"3,2")+"'/>";
+    svg+="<text x='"+(pL-4)+"' y='"+(y+4)+"' font-size='8' text-anchor='end' fill='"+(pos===1?"#ffc800":"#445")+"'>"+pos+"\u00b0</text>";
+  }
+  days.forEach(function(day,i){
+    if(n>12&&i%2!==0)return;
+    svg+="<text x='"+xS(i)+"' y='"+(H-pB+12)+"' font-size='7' text-anchor='middle' fill='#445'>"+day.slice(5).replace("-","/")+  "</text>";
+  });
+  svg+="<line x1='"+pL+"' y1='"+pT+"' x2='"+pL+"' y2='"+(H-pB)+"' stroke='rgba(255,255,255,.15)' stroke-width='1'/>";
+  svg+="<line x1='"+pL+"' y1='"+(H-pB)+"' x2='"+(W-pR)+"' y2='"+(H-pB)+"' stroke='rgba(255,255,255,.15)' stroke-width='1'/>";
+  activeSeries.forEach(function(s){
+    var d="M"+xS(0)+" "+yS(s.positions[0]);
+    s.positions.forEach(function(v,i){if(i>0)d+=" L"+xS(i)+" "+yS(v);});
+    svg+="<path d='"+d+"' fill='none' stroke='"+s.color+"' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/>";
+    s.positions.forEach(function(v,i){svg+="<circle cx='"+xS(i)+"' cy='"+yS(v)+"' r='3' fill='"+s.color+"'/>";});
+    svg+="<text x='"+(W-pR+2)+"' y='"+(yS(s.positions[n-1])+3)+"' font-size='7.5' fill='"+s.color+"' font-weight='bold'>"+s.positions[n-1]+"\u00b0</text>";
+  });
+  svg+="</svg>";
+  const selector="<div style='display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px'>"
+    +series.map(function(s){
+      const on=s.active;
+      return "<button onclick=\"adminChartToggle('"+s.pid+"')\" style='padding:3px 9px;border-radius:6px;border:2px solid "+s.color+";background:"+(on?"rgba(255,255,255,.1)":"transparent")+";color:"+(on?s.color:"rgba(255,255,255,.2)")+";font-size:.68rem;font-weight:"+(on?700:400)+";cursor:pointer;text-decoration:"+(on?"none":"line-through")+"'>"+s.name+"</button>";
+    }).join("")
+    +"<button onclick=\"adminChartToggle('')\" style='padding:3px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.15);color:#667;font-size:.65rem;cursor:pointer;margin-left:2px'>\u21ba</button>"
+    +"</div>";
+  return "<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:.75rem .85rem;margin-bottom:.9rem'>"
+    +"<div style='font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin-bottom:4px'>\ud83d\udcc8 EVOLUCI\u00d3N DE POSICIONES</div>"
+    +"<div style='font-size:.62rem;color:#556;margin-bottom:8px'>1\u00b0 = l\u00edder \u00b7 click para mostrar/ocultar \u00b7 \u21ba = todos</div>"
+    +selector
+    +(activeSeries.length?svg:"<div style='text-align:center;font-size:.72rem;color:#445;padding:1rem'>Selecciona al menos un participante</div>")
+    +"</div>";
+}
+
 
 function adminStats(ps, selLgId){
   const leagues=STATE.leagues||[];
@@ -3526,8 +3673,9 @@ function adminStats(ps, selLgId){
       if(ph===ah&&pa===aa){exact++;pts+=5;}
       else{const pw=ph>pa?"h":pa>ph?"a":"d",aw=ah>aa?"h":aa>ah?"a":"d";if(pw===aw){correct++;pts+=3;}else wrong++;}
     });
-    return {...p,exact,correct,wrong,pts,played:exact+correct+wrong};
-  }).sort((a,b)=>b.pts-a.pts);
+    const tb=tiebreakScore(p.id); // full tiebreaker including gpts, submittedAt
+    return {...p,exact,correct,wrong,pts:tb.pts,gpts:tb.gpts,submittedAt:tb.submittedAt,played:exact+correct+wrong};
+  }).sort(cmpRank);
 
   const totalPlayed=playedMatches.length;
 
@@ -3554,10 +3702,10 @@ function adminStats(ps, selLgId){
 
   // ── Fun stats ──
   const topExact=ranked.sort((a,b)=>b.exact-a.exact)[0];
-  const topPts=ranked.sort((a,b)=>b.pts-a.pts)[0];
+  const topPts=ranked.sort(cmpRank)[0];
   const bottomPts=ranked.filter(p=>p.played>0).sort((a,b)=>a.pts-b.pts)[0];
   const mostWrong=ranked.sort((a,b)=>b.wrong-a.wrong)[0];
-  ranked.sort((a,b)=>b.pts-a.pts); // restore sort
+  ranked.sort(cmpRank); // restore sort
 
   function statCard(emoji,label,name,value,color){
     return `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .8rem;display:flex;align-items:center;gap:.65rem">
@@ -3571,6 +3719,9 @@ function adminStats(ps, selLgId){
   }
 
   return `${lgTabsHTML}
+  <!-- ── GRÁFICO DE PROGRESO ── -->
+  ${adminProgressChart(filteredPs)}
+
   <!-- ── HIGHLIGHTS ── -->
   <div style="font-size:.68rem;letter-spacing:2px;color:#ffc800;font-weight:700;margin:.5rem 0 .4rem">✨ DESTACADOS</div>
   <div style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem">
@@ -3744,7 +3895,7 @@ function adminSetCrybaby(lgId, pid){
 
 function pgLeaderboard(tab){
   const ps=STATE.participants.filter(p=>!p.hidden);
-  const scored=ps.map(p=>({...p,pts:scoreFull(p.id)})).sort((a,b)=>b.pts-a.pts);
+  const scored=ps.map(p=>({...p,pts:scoreFull(p.id)})).sort(cmpRank);
   const medals=["🥇","🥈","🥉"];
   const sel=ROUTE.sel||null;
   const grp=ROUTE.grp||"A";
@@ -4918,12 +5069,13 @@ function userStatsTab(pid, myLeagues, selLgId){
       else{const pw=ph>pa?"h":pa>ph?"a":"d",aw=ah>aa?"h":aa>ah?"a":"d";if(pw===aw){correct++;gpts+=3;}else wrong++;}
     });
     const totalPts=lgScore(p.id);
-    return {id:p.id,name:p.name,qn:(pred.quinName||p.name),exact:exact,correct:correct,wrong:wrong,gpts:gpts,pts:totalPts};
-  }).sort(function(a,b){return b.pts-a.pts;});
+    const tb=tiebreakScore(p.id);
+    return {id:p.id,name:p.name,qn:(pred.quinName||p.name),exact:exact,correct:correct,wrong:wrong,gpts:tb.gpts,pts:tb.pts,submittedAt:tb.submittedAt};
+  }).sort(cmpRank);
 
   // Tiebreaker: same method as lgScore ranking — pts desc, exact desc, correct desc, name asc
   function tiebreak(a,b){
-    return b.pts-a.pts||b.exact-a.exact||b.correct-a.correct||a.name.localeCompare(b.name);
+    return cmpRank(a,b);
   }
 
   // Get all tied winners for each category
