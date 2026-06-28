@@ -2757,35 +2757,39 @@ function pgMyScore(pid){
           rounds.push({label:"Clasif. 16vos",hit,total:32,color:"#ffd580",enabled:true});
         }
 
-        // Clasif. Octavos (16 winners of R32)
+        // Clasif. Octavos (16 winners of R32) — team-based
         if(enabled2.r32){
-          let hit=0,dec=0;
-          const pR32=(pred.ko||{}).r32||{},aR32=aKO2.r32||{};
-          for(let i=0;i<16;i++){if(aR32[i]){dec++;if(pR32[i]===aR32[i])hit++;}}
+          const aR32=aKO2.r32||{};const dec=Object.keys(aR32).length;
+          const actT=new Set(Object.values(aR32).filter(Boolean));
+          const pkT=new Set(Object.values((pred.ko||{}).r32||{}).filter(Boolean));
+          let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
           rounds.push({label:"Octavos",hit,total:dec||16,color:"#88aaff",enabled:dec>0});
         }
 
-        // Clasif. Cuartos (8 winners of R16)
+        // Clasif. Cuartos (8 winners of R16) — team-based
         if(enabled2.r16){
-          let hit=0,dec=0;
-          const pR16=(pred.ko||{}).r16||{},aR16=aKO2.r16||{};
-          for(let i=0;i<8;i++){if(aR16[i]){dec++;if(pR16[i]===aR16[i])hit++;}}
+          const aR16=aKO2.r16||{};const dec=Object.keys(aR16).length;
+          const actT=new Set(Object.values(aR16).filter(Boolean));
+          const pkT=new Set(Object.values((pred.ko||{}).r16||{}).filter(Boolean));
+          let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
           rounds.push({label:"Cuartos",hit,total:dec||8,color:"#88aaff",enabled:dec>0});
         }
 
-        // Clasif. Semis (4 winners of QF)
+        // Clasif. Semis (4 winners of QF) — team-based
         if(enabled2.qf){
-          let hit=0,dec=0;
-          const pQF=(pred.ko||{}).qf||{},aQF=aKO2.qf||{};
-          for(let i=0;i<4;i++){if(aQF[i]){dec++;if(pQF[i]===aQF[i])hit++;}}
+          const aQF=aKO2.qf||{};const dec=Object.keys(aQF).length;
+          const actT=new Set(Object.values(aQF).filter(Boolean));
+          const pkT=new Set(Object.values((pred.ko||{}).qf||{}).filter(Boolean));
+          let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
           rounds.push({label:"Semis",hit,total:dec||4,color:"#88aaff",enabled:dec>0});
         }
 
-        // Clasif. Final (2 winners of SF)
+        // Clasif. Final (2 winners of SF) — team-based
         if(enabled2.sf){
-          let hit=0,dec=0;
-          const pSF=(pred.ko||{}).sf||{},aSF=aKO2.sf||{};
-          for(let i=0;i<2;i++){if(aSF[i]){dec++;if(pSF[i]===aSF[i])hit++;}}
+          const aSF=aKO2.sf||{};const dec=Object.keys(aSF).length;
+          const actT=new Set(Object.values(aSF).filter(Boolean));
+          const pkT=new Set(Object.values((pred.ko||{}).sf||{}).filter(Boolean));
+          let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
           rounds.push({label:"Final",hit,total:dec||2,color:"#88aaff",enabled:dec>0});
           // Campeón
           const pC=((pred.ko||{}).final||{})[0],aC=aKO2.final?.[0];
@@ -2912,7 +2916,7 @@ function pgMyScore(pid){
           const dec=Object.keys(r.actData).length;
           if(enabled4[r.enKey]&&dec>0) activeRounds.push({
             key:r.key,label:r.label,sublabel:r.sublabel,total:dec,pts:r.pts,
-            score:mid=>{let h=0;const pk=((STATE.predictions[mid]||{}).ko||{})[r.key]||{};Object.keys(r.actData).forEach(i=>{if(pk[i]===r.actData[i])h++;});return h;}
+            score:mid=>{const actTeams=new Set(Object.values(r.actData).filter(Boolean));const pkTeams=new Set(Object.values(((STATE.predictions[mid]||{}).ko||{})[r.key]||{}).filter(Boolean));let h=0;actTeams.forEach(t=>{if(pkTeams.has(t))h++;});return h;}
           });
         });
         // Campeón
@@ -5425,7 +5429,7 @@ function userStatsTab(pid, myLeagues, selLgId){
       var aR32=aKO3.r32||{},dec32=Object.keys(aR32).length;
       if(dec32>0) roundDefs.push({
         label:"Octavos",total:dec32,
-        score:function(p){var hit=0,pR=((STATE.predictions[p.id]||{}).ko||{}).r32||{};Object.keys(aR32).forEach(function(i){if(pR[i]===aR32[i])hit++;});return hit;}
+        score:function(p){var actT=new Set(Object.values(aR32).filter(Boolean)),pkT=new Set(Object.values(((STATE.predictions[p.id]||{}).ko||{}).r32||{}).filter(Boolean)),h=0;actT.forEach(function(t){if(pkT.has(t))h++;});return h;}
       });
     }
 
@@ -5434,7 +5438,7 @@ function userStatsTab(pid, myLeagues, selLgId){
       var aR16=aKO3.r16||{},dec16=Object.keys(aR16).length;
       if(dec16>0) roundDefs.push({
         label:"Cuartos",total:dec16,
-        score:function(p){var hit=0,pR=((STATE.predictions[p.id]||{}).ko||{}).r16||{};Object.keys(aR16).forEach(function(i){if(pR[i]===aR16[i])hit++;});return hit;}
+        score:function(p){var actT=new Set(Object.values(aR16).filter(Boolean)),pkT=new Set(Object.values(((STATE.predictions[p.id]||{}).ko||{}).r16||{}).filter(Boolean)),h=0;actT.forEach(function(t){if(pkT.has(t))h++;});return h;}
       });
     }
 
@@ -5443,7 +5447,7 @@ function userStatsTab(pid, myLeagues, selLgId){
       var aQF=aKO3.qf||{},decQF=Object.keys(aQF).length;
       if(decQF>0) roundDefs.push({
         label:"Semis",total:decQF,
-        score:function(p){var hit=0,pR=((STATE.predictions[p.id]||{}).ko||{}).qf||{};Object.keys(aQF).forEach(function(i){if(pR[i]===aQF[i])hit++;});return hit;}
+        score:function(p){var actT=new Set(Object.values(aQF).filter(Boolean)),pkT=new Set(Object.values(((STATE.predictions[p.id]||{}).ko||{}).qf||{}).filter(Boolean)),h=0;actT.forEach(function(t){if(pkT.has(t))h++;});return h;}
       });
     }
 
@@ -5452,7 +5456,7 @@ function userStatsTab(pid, myLeagues, selLgId){
       var aSF=aKO3.sf||{},decSF=Object.keys(aSF).length;
       if(decSF>0) roundDefs.push({
         label:"Final",total:decSF,
-        score:function(p){var hit=0,pR=((STATE.predictions[p.id]||{}).ko||{}).sf||{};Object.keys(aSF).forEach(function(i){if(pR[i]===aSF[i])hit++;});return hit;}
+        score:function(p){var actT=new Set(Object.values(aSF).filter(Boolean)),pkT=new Set(Object.values(((STATE.predictions[p.id]||{}).ko||{}).sf||{}).filter(Boolean)),h=0;actT.forEach(function(t){if(pkT.has(t))h++;});return h;}
       });
       // Champion
       var aC=aKO3.final?.[0];
