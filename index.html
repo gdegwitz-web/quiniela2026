@@ -938,11 +938,9 @@ function pickAdminKO(round,matchId,team){
   if(!STATE.actuals._ko[round]) STATE.actuals._ko[round]={};
   if(STATE.actuals._ko[round][matchId]===team){
     delete STATE.actuals._ko[round][matchId];
-    // Also clear 4th place if deselecting f3 winner
     if(round==="f3"&&matchId===0) delete STATE.actuals._ko.f3[1];
   } else {
     STATE.actuals._ko[round][matchId]=team;
-    // Auto-store 4th place (loser of 3rd place match)
     if(round==="f3"&&matchId===0){
       try{
         const B=adminBracketSVG.__lastB||(function(){
@@ -955,7 +953,24 @@ function pickAdminKO(round,matchId,team){
     }
   }
   fbWriteActuals();
-  showFlash("✓ "+team+" clasificado");
+
+  // Show scoring summary: how many participants gained pts from this pick
+  const pts={r32:10,r16:15,qf:20,sf:30,qf:20,final:40,f3:20}[round]||0;
+  const enabled=(STATE.actuals._koEnabled)||{};
+  const roundEnabled={r32:enabled.r32,r16:enabled.r16,qf:enabled.qf,sf:enabled.sf,f3:enabled.sf,final:enabled.sf}[round];
+  if(roundEnabled&&pts&&STATE.actuals._ko[round]&&STATE.actuals._ko[round][matchId]===team){
+    const winners=STATE.participants.filter(p=>{
+      const ko=(STATE.predictions[p.id]||{}).ko||{};
+      return (ko[round]||{})[matchId]===team;
+    });
+    if(winners.length>0)
+      showFlash("✓ "+team+" avanza — "+winners.length+" participante"+(winners.length!==1?"s":"")+" gana"+(winners.length!==1?"n":"")+" +"+pts+" pts 🎯");
+    else
+      showFlash("✓ "+team+" avanza — nadie lo tenía en esta ronda");
+  } else {
+    showFlash("✓ "+team+(STATE.actuals._ko[round]?.[matchId]===team?" clasificado":" deseleccionado"));
+  }
+
   go("admin",{tab:"results",grp:"KO"});
 }
 
@@ -980,36 +995,29 @@ function scoreKO(pred){
     // Admin-controlled enable flags per round
     const enabled=(STATE.actuals&&STATE.actuals._koEnabled)||{};
 
-    // Data completeness guards (sequential)
-    const groupMatches=MATCHES.filter(m=>m.g!=="KO");
-    const playedGroups=groupMatches.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).length;
-    const groupsDone=playedGroups>=groupMatches.length;
-
-    const r32E=Object.keys(aKO.r32||{}).length;
-    const r16E=Object.keys(aKO.r16||{}).length;
-    const qfE =Object.keys(aKO.qf||{}).length;
-    const sfE =Object.keys(aKO.sf||{}).length;
-
-    // Admin enables rounds sequentially — points accumulate match by match as results are entered
-    const canScoreR32= groupsDone && !!enabled.r32;
+    // Admin enable buttons control when each round scores — no groupsDone dependency
+    const canScoreR32= !!enabled.r32;
     const canScoreR16= canScoreR32 && !!enabled.r16;
     const canScoreQF = canScoreR16 && !!enabled.qf;
     const canScoreFin= canScoreQF  && !!enabled.sf;
 
-    // R32 → +10 per correct result as it's entered
+    // R32 → +10 per team correctly predicted to advance (any slot match)
     if(canScoreR32){
-      const actual=aKO.r32||{},pick=ko.r32||{};
-      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=10;});
+      const actualTeams=new Set(Object.values(aKO.r32||{}).filter(Boolean));
+      const pickedTeams=new Set(Object.values(ko.r32||{}).filter(Boolean));
+      actualTeams.forEach(team=>{if(pickedTeams.has(team))p+=10;});
     }
-    // R16 → +15 per correct result as it's entered
+    // R16 → +15 per team correctly predicted to advance (any slot match)
     if(canScoreR16){
-      const actual=aKO.r16||{},pick=ko.r16||{};
-      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=15;});
+      const actualTeams=new Set(Object.values(aKO.r16||{}).filter(Boolean));
+      const pickedTeams=new Set(Object.values(ko.r16||{}).filter(Boolean));
+      actualTeams.forEach(team=>{if(pickedTeams.has(team))p+=15;});
     }
-    // QF → +20 per correct result as it's entered
+    // QF → +20 per team correctly predicted to advance (any slot match)
     if(canScoreQF){
-      const actual=aKO.qf||{},pick=ko.qf||{};
-      Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=20;});
+      const actualTeams=new Set(Object.values(aKO.qf||{}).filter(Boolean));
+      const pickedTeams=new Set(Object.values(ko.qf||{}).filter(Boolean));
+      actualTeams.forEach(team=>{if(pickedTeams.has(team))p+=20;});
     }
     // SF/Final/Podio → score each match as it comes in
     if(canScoreFin){
@@ -1069,15 +1077,17 @@ function scoreKODetail(pred){
       }
     }catch(e){}
     // SF removed from per-round scoring — covered by "Clasificado a Final" below
+    // R32/R16/QF: team-based (any user who predicted this team to advance gets points)
     const rounds={r32:{pts:10,label:"R32"},r16:{pts:15,label:"Octavos"},qf:{pts:20,label:"Cuartos"}};
     Object.entries(rounds).forEach(([rnd,cfg])=>{
       const actual=aKO[rnd]||{};
-      const pick=ko[rnd]||{};
+      const pickedTeams=new Set(Object.values(ko[rnd]||{}).filter(Boolean));
       Object.keys(actual).sort((a,b)=>+a-+b).forEach(idx=>{
         const aTeam=actual[idx];
-        const pTeam=pick[String(idx)]||"—";
-        const ok=aTeam&&pTeam===aTeam;
-        rows.push({round:cfg.label,idx,aTeam,pTeam,pts:ok?cfg.pts:0,ok});
+        if(!aTeam) return;
+        const ok=pickedTeams.has(aTeam);
+        // Show the user's pick for this team (whichever slot they put it in)
+        rows.push({round:cfg.label,idx,aTeam,pTeam:ok?aTeam:"—",pts:ok?cfg.pts:0,ok});
       });
     });
     const aFinal=aKO.final||{}, pFinal=ko.final||{};
@@ -3486,6 +3496,34 @@ function pgAdmin(tab){
       Haz clic en el equipo ganador de cada partido para confirmar quién avanza.
     </div>
     ${adminBracketSVG()}
+    ${(()=>{
+      // Live score ranking — shows current totals so admin can verify scoring works
+      const ps2=STATE.participants.filter(p=>!p.hidden&&STATE.predictions[p.id]);
+      if(!ps2.length) return "";
+      const enabled5=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+      const hasEnabled=Object.values(enabled5).some(Boolean);
+      if(!hasEnabled) return "";
+      const rows=ps2.map(p=>({name:p.name,pts:scoreFull(p.id),ko:scoreKO(STATE.predictions[p.id]||{})}))
+        .sort((a,b)=>b.pts-a.pts);
+      return `<div style="margin-top:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden">
+        <div style="background:rgba(255,200,0,.07);padding:6px 10px;font-size:.6rem;color:#ffc800;font-weight:700;letter-spacing:1px">📊 PUNTAJES EN VIVO</div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid rgba(255,255,255,.07)">
+            <th style="padding:5px 8px;font-size:.58rem;color:#667;font-weight:400;text-align:left">JUGADOR</th>
+            <th style="padding:5px 6px;text-align:right;font-size:.58rem;color:#667;font-weight:400">GRUPOS</th>
+            <th style="padding:5px 6px;text-align:right;font-size:.58rem;color:#88aaff;font-weight:600">KO</th>
+            <th style="padding:5px 8px;text-align:right;font-size:.58rem;color:#ffc800;font-weight:700">TOTAL</th>
+          </tr></thead><tbody>
+          ${rows.map((r,i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:5px 8px;font-size:.72rem;color:${i===0?"#4de0a0":"#ccc"}">${i===0?"🥇 ":""}${r.name}</td>
+            <td style="padding:5px 6px;text-align:right;font-size:.7rem;color:#889">${r.pts-r.ko}</td>
+            <td style="padding:5px 6px;text-align:right;font-size:.7rem;color:${r.ko>0?"#88aaff":"#445"};font-weight:${r.ko>0?700:400}">${r.ko>0?"+"+r.ko:"—"}</td>
+            <td style="padding:5px 8px;text-align:right;font-size:.78rem;font-weight:700;color:#ffc800">${r.pts}</td>
+          </tr>`).join("")}
+          </tbody>
+        </table></div>
+      </div>`;
+    })()}
     `:`
     <div style="font-size:.7rem;letter-spacing:2px;color:#667;margin:.4rem 0 .25rem">GRUPO ${grp}</div>
     ${MATCHES.filter(m=>m.g===grp).map(m=>{const s=(STATE.actuals||{})[m.id]||{h:"",a:""};const done=s.h!==""&&s.a!=="";
