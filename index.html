@@ -2826,7 +2826,7 @@ function pgMyScore(pid){
       };
 
       if(koMembers.length){
-        koLigaHtml=lgSelector+"<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;margin-bottom:8px'>"
+        let koFinalesHtml="<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;margin-bottom:8px'>"
           +"<div style='background:rgba(255,200,0,.08);padding:6px 10px;font-size:.62rem;color:#ffc800;font-weight:700;letter-spacing:1px'>🏆 PICKS FINALES DE LA LIGA <span style='font-weight:400;color:#667'>("+selLg.name+")</span></div>"
           +"<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;min-width:280px'>"
           +"<thead><tr style='border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)'>"
@@ -2850,6 +2850,84 @@ function pgMyScore(pid){
             +"</tr>";
           }).join("")
           +"</tbody></table></div></div>";
+
+        // ── Per-round accuracy table ──────────────────────────
+        const enabled4=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+        const allGrpMs4=MATCHES.filter(m=>m.g!=="KO");
+        const grpsDone4=allGrpMs4.length>0&&allGrpMs4.every(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";});
+
+        // Define active rounds with their actual results
+        const activeRounds=[];
+
+        if(enabled4.groupAdv&&grpsDone4){
+          let actBk=null;try{actBk=buildBracket(STATE.actuals||{},{});}catch(e){}
+          if(actBk){
+            const actSet=new Set(actBk.r32.flatMap(m=>[m.h,m.a]).filter(Boolean));
+            activeRounds.push({key:"r32g",label:"16vos",sublabel:"clasificados",total:32,
+              score:mid=>{let h=0;try{const ub=buildBracket((STATE.predictions[mid]||{}).groups||{},{});ub.r32.forEach(m=>{if(m.h&&actSet.has(m.h))h++;if(m.a&&actSet.has(m.a))h++;});}catch(e){}return h;}
+            });
+          }
+        }
+        const rounds4=[
+          {key:"r32",label:"Octavos",sublabel:"ganadores 16vos",pts:10,total:16,actData:aKO.r32||{},enKey:"r32"},
+          {key:"r16",label:"Cuartos", sublabel:"ganadores 8vos",pts:15,total:8, actData:aKO.r16||{},enKey:"r16"},
+          {key:"qf", label:"Semis",  sublabel:"ganadores QF",  pts:20,total:4, actData:aKO.qf||{}, enKey:"qf"},
+          {key:"sf", label:"Final",  sublabel:"finalistas",    pts:30,total:2, actData:aKO.sf||{}, enKey:"sf"},
+        ];
+        rounds4.forEach(r=>{
+          const dec=Object.keys(r.actData).length;
+          if(enabled4[r.enKey]&&dec>0) activeRounds.push({
+            key:r.key,label:r.label,sublabel:r.sublabel,total:dec,pts:r.pts,
+            score:mid=>{let h=0;const pk=((STATE.predictions[mid]||{}).ko||{})[r.key]||{};Object.keys(r.actData).forEach(i=>{if(pk[i]===r.actData[i])h++;});return h;}
+          });
+        });
+        // Campeón
+        const ac4=(aKO.final||{})[0];
+        if(enabled4.sf&&ac4) activeRounds.push({
+          key:"final",label:"Campeón",sublabel:"",total:1,pts:40,
+          score:mid=>{const c=(((STATE.predictions[mid]||{}).ko||{}).final||{})[0];return c===ac4?1:0;}
+        });
+
+        if(activeRounds.length>0&&koMembers.length>0){
+          // compute scores matrix
+          const matrix=koMembers.map(m=>{
+            const scores=activeRounds.map(r=>({hit:r.score(m.id),total:r.total}));
+            const tot=scores.reduce((s,x)=>s+x.hit,0);
+            return {m,scores,tot};
+          }).sort((a,b)=>b.tot-a.tot||a.m.name.localeCompare(b.m.name));
+
+          const cellKO=(hit,total)=>{
+            if(total===0) return "<td style='text-align:center;padding:4px 3px;font-size:.7rem;color:#334'>—</td>";
+            const pct=total>0?hit/total:0;
+            const col=pct>=0.75?"#4de0a0":pct>=0.5?"#ffc800":pct>=0.25?"#88aaff":"#ff8080";
+            const bg=pct>=0.75?"rgba(77,224,160,.06)":pct>=0.5?"rgba(255,200,0,.06)":pct>=0.25?"rgba(136,170,255,.05)":"rgba(255,100,100,.05)";
+            return "<td style='text-align:center;padding:4px 3px;background:"+bg+"'>"
+              +"<div style='font-size:.78rem;font-weight:700;color:"+col+"'>"+hit+"<span style='font-size:.55rem;color:#445'>/"+total+"</span></div>"
+            +"</td>";
+          };
+
+          koLigaHtml=lgSelector+("<div style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;margin-bottom:8px'>"
+            +"<div style='background:rgba(136,170,255,.08);padding:6px 10px;font-size:.62rem;color:#88aaff;font-weight:700;letter-spacing:1px'>⚡ ACIERTOS POR RONDA <span style='font-weight:400;color:#667'>("+selLg.name+")</span></div>"
+            +"<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;min-width:"+Math.max(220,160+activeRounds.length*58)+"px'>"
+            +"<thead><tr style='border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)'>"
+            +"<th style='padding:5px 8px;font-size:.58rem;color:#667;font-weight:400;text-align:left;min-width:80px'>JUGADOR</th>"
+            +activeRounds.map(r=>"<th style='padding:4px 3px;text-align:center;font-size:.58rem;color:#889;font-weight:600;min-width:52px;white-space:nowrap'>"+r.label+"<br><span style='font-size:.5rem;color:#445'>de "+r.total+"</span></th>").join("")
+            +"<th style='padding:4px 6px;text-align:center;font-size:.58rem;color:#667;font-weight:600;min-width:44px'>TOT.</th>"
+            +"</tr></thead><tbody>"
+            +matrix.map((row,i)=>{
+              const isMe=row.m.id===pid;
+              return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"'>"
+                +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":i===0?"#4de0a0":"#eee")+";white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis'>"
+                +(i===0?"🥇 ":isMe?"":"")
+                +row.m.name+(isMe?" ←":"")+"</td>"
+                +row.scores.map(s=>cellKO(s.hit,s.total)).join("")
+                +"<td style='text-align:center;padding:4px 6px;font-size:.82rem;font-weight:800;color:"+(isMe?"#ffc800":i===0?"#4de0a0":"#aab")+"'>"+row.tot+"</td>"
+              +"</tr>";
+            }).join("")
+            +"</tbody></table></div></div>")+koFinalesHtml;
+        } else {
+          koLigaHtml=lgSelector+koFinalesHtml;
+        }
       }
     }
 
