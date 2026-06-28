@@ -990,38 +990,52 @@ function scoreKO(pred){
     const qfE =Object.keys(aKO.qf||{}).length;
     const sfE =Object.keys(aKO.sf||{}).length;
 
-    // Admin must enable each round AND data must be complete
-    const canScoreR32= groupsDone            && !!enabled.r32;
-    const canScoreR16= canScoreR32&&r32E>=16 && !!enabled.r16;
-    const canScoreQF = canScoreR16&&r16E>=8  && !!enabled.qf;
-    const canScoreFin= canScoreQF &&qfE>=4&&sfE>=2 && !!enabled.sf;
+    // Admin enables rounds sequentially — points accumulate match by match as results are entered
+    const canScoreR32= groupsDone && !!enabled.r32;
+    const canScoreR16= canScoreR32 && !!enabled.r16;
+    const canScoreQF = canScoreR16 && !!enabled.qf;
+    const canScoreFin= canScoreQF  && !!enabled.sf;
 
-    // R32 → +10 per correct
+    // R32 → +10 per correct result as it's entered
     if(canScoreR32){
       const actual=aKO.r32||{},pick=ko.r32||{};
       Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=10;});
     }
-    // R16 → +15 per correct
+    // R16 → +15 per correct result as it's entered
     if(canScoreR16){
       const actual=aKO.r16||{},pick=ko.r16||{};
       Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=15;});
     }
-    // QF → +20 per correct
+    // QF → +20 per correct result as it's entered
     if(canScoreQF){
       const actual=aKO.qf||{},pick=ko.qf||{};
       Object.keys(actual).forEach(idx=>{if(actual[idx]&&pick[String(idx)]===actual[idx])p+=20;});
     }
-    // SF/Final/Podio → only after SF date
+    // SF/Final/Podio → score each match as it comes in
     if(canScoreFin){
-      const aFinal=aKO.final||{},pSF=ko.sf||{};
-      const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
-      if(actualFinalists.length>0){
-        if(pSF[0]&&actualFinalists.includes(pSF[0]))p+=30;
-        if(pSF[1]&&actualFinalists.includes(pSF[1]))p+=30;
-      }
+      const aSF=aKO.sf||{};
+      const aFinal=aKO.final||{};
+      const pSF=ko.sf||{};
       const pFinal=ko.final||{};
+
+      // +30 per correctly predicted finalist — scored as each SF result arrives
+      if(aSF[0]&&pSF[0]&&[aSF[0],aSF[1]].filter(Boolean).includes(pSF[0]))p+=30;
+      if(aSF[1]&&pSF[1]&&[aSF[0],aSF[1]].filter(Boolean).includes(pSF[1]))p+=30;
+
+      // Champion (+40) — scored when final result is entered
       if(aFinal[0]&&pFinal[0]===aFinal[0])p+=40;
-      if(aFinal[1]&&pFinal[1]===aFinal[1])p+=30;
+
+      // Runner-up (+30) — only derivable once both SFs AND final result are in
+      const sfE2=Object.keys(aSF).length;
+      if(sfE2>=2&&aFinal[0]){
+        const actualFinalists=[aSF[0],aSF[1]].filter(Boolean);
+        const actualRU=actualFinalists[0]===aFinal[0]?actualFinalists[1]:actualFinalists[0];
+        const userRU=pFinal[0]
+          ?(pSF[0]&&pSF[0]!==pFinal[0]?pSF[0]:pSF[1]&&pSF[1]!==pFinal[0]?pSF[1]:null):null;
+        if(actualRU&&userRU&&userRU===actualRU)p+=30;
+      }
+
+      // 3rd place (+20) and 4th place (+10)
       const aF3=aKO.f3||{},pF3=ko.f3||{};
       if(aF3[0]&&pF3[0]===aF3[0])p+=20;
       if(aF3[1]){
@@ -1068,8 +1082,8 @@ function scoreKODetail(pred){
     });
     const aFinal=aKO.final||{}, pFinal=ko.final||{};
     const aSF2=aKO.sf||{}, pSF2=ko.sf||{};
-    const actualFinalists=[aFinal[0],aFinal[1]].filter(Boolean);
-    // Clasificado a Final: +30 per correct finalist using SF picks
+    // Clasificado a Final: +30 per correct finalist — actual finalists = SF winners
+    const actualFinalists=[aSF2[0],aSF2[1]].filter(Boolean);
     if(actualFinalists.length>0){
       [0,1].forEach(i=>{
         if(!aSF2[i]) return;
@@ -1080,8 +1094,12 @@ function scoreKODetail(pred){
     }
     // Champion +40
     if(aFinal[0]) rows.push({round:"Campeón",idx:0,aTeam:aFinal[0],pTeam:pFinal[0]||"—",pts:pFinal[0]===aFinal[0]?40:0,ok:pFinal[0]===aFinal[0]});
-    // Runner-up +30
-    if(aFinal[1]) rows.push({round:"Subcampeón",idx:1,aTeam:aFinal[1],pTeam:pFinal[1]||"—",pts:pFinal[1]===aFinal[1]?30:0,ok:pFinal[1]===aFinal[1]});
+    // Runner-up +30: derive from SF winners (the finalist who didn't win)
+    const actualRU2=(aFinal[0]&&actualFinalists.length>=2)
+      ?(actualFinalists[0]===aFinal[0]?actualFinalists[1]:actualFinalists[0]):null;
+    const userRU2=pFinal[0]
+      ?(pSF2[0]&&pSF2[0]!==pFinal[0]?pSF2[0]:pSF2[1]&&pSF2[1]!==pFinal[0]?pSF2[1]:null):null;
+    if(actualRU2) rows.push({round:"Subcampeón",idx:1,aTeam:actualRU2,pTeam:userRU2||"—",pts:(userRU2&&userRU2===actualRU2)?30:0,ok:userRU2===actualRU2});
     const aF3=aKO.f3||{}, pF3=ko.f3||{};
     // 3rd +20
     if(aF3[0]) rows.push({round:"3er lugar",idx:0,aTeam:aF3[0],pTeam:pF3[0]||"—",pts:pF3[0]===aF3[0]?20:0,ok:pF3[0]===aF3[0]});
@@ -1333,6 +1351,9 @@ function initFirebase(){
 
       if(!val) return;
 
+      // Snapshot actuals before update to detect changes
+      const prevActualsStr=JSON.stringify(STATE.actuals||{});
+
       if(val.participants) STATE.participants=Object.values(val.participants);
       if(val.predictions)  STATE.predictions=val.predictions;
       if(val.actuals){
@@ -1352,8 +1373,11 @@ function initFirebase(){
         STATE.leagues=[];
       }
       localStorage.setItem(LS,JSON.stringify(STATE));
-      // On first Firebase load (e.g. incognito), refresh the page so data appears
-      if(!window._fbLoaded){
+
+      const actualsChanged=JSON.stringify(STATE.actuals||{})!==prevActualsStr;
+
+      // Re-render on first load OR whenever actuals change (KO results, enables, group scores)
+      if(!window._fbLoaded||actualsChanged){
         window._fbLoaded=true;
         renderApp();
       }
@@ -1960,7 +1984,7 @@ function pgLanding(){
       </div>
       <div style="margin-top:.7rem;padding:.5rem .7rem;background:rgba(255,200,0,.07);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:.7rem;color:rgba(255,255,255,.45)">Puntuación máxima posible</span>
-        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">1.196 pts</span>
+        <span style="font-size:1.1rem;font-weight:800;color:#ffc800">1.136 pts</span>
       </div>
     </div>
   </div>
@@ -4318,7 +4342,7 @@ function scoringHelpHTML(){
             <div style="display:flex;justify-content:space-between"><span>🥉 3er Lugar</span><span style="color:#ffc800;font-weight:700">+20</span></div>
             <div style="display:flex;justify-content:space-between"><span>4to Lugar</span><span style="color:#ffc800;font-weight:700">+10</span></div>
           </div>
-          <div style="margin-top:.5rem;font-size:.72rem;color:#667">Máximo posible: 1.196 pts</div>
+          <div style="margin-top:.5rem;font-size:.72rem;color:#667">Máximo posible: 1.136 pts</div>
         </div>
         <div style="background:rgba(255,80,80,.06);border:1px solid rgba(255,80,80,.18);border-radius:9px;padding:.7rem .8rem">
           <div style="font-weight:700;color:#ff9090;margin-bottom:.5rem">⚖️ DESEMPATE AL FINAL</div>
