@@ -606,7 +606,7 @@ const THIRDS_TABLE={
 "BDEFHIJL":{"1":"B","4":"D","6":"E","7":"H","8":"F","9":"I","12":"J","14":"L"},
 "BDEFHIKL":{"1":"B","4":"D","6":"E","7":"K","8":"F","9":"H","12":"I","14":"L"},
 "BDEFHJKL":{"1":"B","4":"D","6":"E","7":"K","8":"F","9":"H","12":"J","14":"L"},
-"BDEFIJKL":{"1":"B","4":"D","6":"E","7":"K","8":"F","9":"I","12":"J","14":"L"},
+"BDEFIJKL":{"1":"D","4":"F","6":"E","7":"K","8":"B","9":"I","12":"J","14":"L"},
 "BDEGHIJK":{"1":"B","4":"D","6":"E","7":"K","8":"I","9":"H","12":"G","14":"J"},
 "BDEGHIJL":{"1":"B","4":"D","6":"E","7":"H","8":"I","9":"J","12":"G","14":"L"},
 "BDEGHIKL":{"1":"B","4":"D","6":"E","7":"K","8":"I","9":"H","12":"G","14":"L"},
@@ -2288,7 +2288,8 @@ function hoyTab(pid,pred){
 
   if(todayMatches.length===0){
     const allDates=[...new Set(MATCHES.map(m=>m.date))];
-    return `<div style="text-align:center;padding:1.5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:.5rem 0">
+    const todayHasKO=Object.values(KO_MATCH_UTC).some(slots=>Object.values(slots).some(utc=>new Date(utc).toDateString()===now.toDateString()));
+    if(!todayHasKO) return `<div style="text-align:center;padding:1.5rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:.5rem 0">
       <div style="font-size:2rem;margin-bottom:.5rem">📅</div>
       <div style="font-weight:700;font-size:.9rem;color:#ffc800;margin-bottom:.3rem">No hay partidos hoy</div>
       <div style="font-size:.75rem;color:#889">Hoy es ${todayStr}. Los partidos del Mundial son del ${allDates[0]} al ${allDates[allDates.length-1]}.</div>
@@ -2467,16 +2468,57 @@ function hoyTab(pid,pred){
 
   const playedToday=todayMatches.filter(m=>{const ac=STATE.actuals?.[m.id];return ac&&ac.h!=="";}).length;
 
+  // ── KO matches today ──
+  const rndLabel={r32:"⚡ 16VOS DE FINAL",r16:"⚡ OCTAVOS DE FINAL",qf:"⚡ CUARTOS DE FINAL",sf:"⚡ SEMIFINAL",f3:"⚡ TERCER LUGAR",final:"🏆 FINAL"};
+  const rndPts={r32:10,r16:15,qf:20,sf:30,f3:20,final:40};
+  const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+  let koRows="",todayKOcount=0;
+  let B2=null;try{B2=buildBracket(STATE.actuals||{},aKO);}catch(e){}
+  ["r32","r16","qf","sf","f3","final"].forEach(rnd=>{
+    const slots=KO_MATCH_UTC[rnd]||{};
+    Object.entries(slots).sort((a,b)=>new Date(a[1])-new Date(b[1])).forEach(([idx,utc])=>{
+      if(new Date(utc).toDateString()!==now.toDateString()) return;
+      todayKOcount++;
+      const time=new Date(utc).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+      const actual=aKO[rnd]&&aKO[rnd][+idx];
+      let teamH=null,teamA=null;
+      try{
+        if(rnd==="r32"&&B2?.r32){const m=B2.r32.find(m=>m.id===+idx);if(m){teamH=m.h;teamA=m.a;}}
+        else if(rnd==="r16"&&B2?.r16){const m=B2.r16[+idx];if(m){teamH=m.h;teamA=m.a;}}
+        else if(rnd==="qf"&&B2?.qf){const m=B2.qf[+idx];if(m){teamH=m.h;teamA=m.a;}}
+        else if(rnd==="sf"&&B2?.sf){const m=B2.sf[+idx];if(m){teamH=m.h;teamA=m.a;}}
+        else if(rnd==="final"&&B2?.final){teamH=B2.final.h;teamA=B2.final.a;}
+        else if(rnd==="f3"&&B2?.f3){teamH=B2.f3.h;teamA=B2.f3.a;}
+      }catch(e){}
+      const userPick=(pred.ko||{})[rnd]&&(pred.ko||{})[rnd][+idx];
+      const isCorrect=actual&&userPick&&actual===userPick;
+      const isWrong=actual&&userPick&&actual!==userPick;
+      koRows+=`<div style="background:rgba(136,170,255,.04);border:1px solid rgba(136,170,255,.15);border-radius:10px;padding:.65rem .8rem;margin-bottom:.45rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+          <span style="font-size:.6rem;font-weight:700;letter-spacing:1px;color:#88aaff">${rndLabel[rnd]||rnd.toUpperCase()} · +${rndPts[rnd]||0}</span>
+          <span style="font-size:.72rem;color:#889">⏱ ${time}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;font-size:.88rem;font-weight:700;margin-bottom:.35rem">
+          <span>${teamH?f(teamH)+" "+teamH:"TBD"}</span>
+          <span style="font-size:.65rem;color:#556;font-weight:400">vs</span>
+          <span>${teamA?teamA+" "+f(teamA):"TBD"}</span>
+        </div>
+        ${actual?`<div style="text-align:center;font-size:.7rem;color:#ffc800;margin-bottom:.25rem">✅ Avanza: ${f(actual)} ${actual}</div>`:""}
+        ${userPick?`<div style="text-align:center;font-size:.68rem;color:${isCorrect?"#4de0a0":isWrong?"#ff8080":"#889"}">Tu pick: ${f(userPick)} ${userPick}${isCorrect?" ✓ +"+rndPts[rnd]+" pts":isWrong?" ✗":""}</div>`:'<div style="text-align:center;font-size:.65rem;color:#445">Sin predicción para esta ronda</div>'}
+      </div>`;
+    });
+  });
+
   return `
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
     <div>
       <div style="font-size:.75rem;font-weight:700;letter-spacing:1px;color:#ffc800">📅 ${todayStr.toUpperCase()}</div>
-      <div style="font-size:.68rem;color:#889">${todayMatches.length} partido${todayMatches.length!==1?"s":""} hoy · ${playedToday} jugado${playedToday!==1?"s":""}</div>
+      <div style="font-size:.68rem;color:#889">${todayMatches.length+todayKOcount} partido${todayMatches.length+todayKOcount!==1?"s":""} hoy · ${playedToday} jugado${playedToday!==1?"s":""}</div>
     </div>
     <button onclick="showHelp()" style="background:rgba(255,200,0,.1);border:1px solid rgba(255,200,0,.25);border-radius:8px;color:#ffc800;font-size:.72rem;font-weight:700;padding:.3rem .7rem;cursor:pointer;flex-shrink:0">❓ Puntuación</button>
   </div>
   ${!hasLeague?`<div style="font-size:.7rem;color:#667;margin-bottom:.5rem;text-align:center;font-style:italic">Únete a una liga para ver el consenso de los demás participantes</div>`:""}
-  ${matchRows.join("")}`;
+  ${matchRows.join("")}${koRows}`;
 }
 
 
@@ -2915,6 +2957,27 @@ function mkCode(){
 function lgScore(pid){
   return scoreFull(pid);
 }
+
+// ── KO Stage kickoff times in UTC — verified against CBS Sports / FIFA official ──
+const KO_MATCH_UTC={
+  r32:{
+    0:"2026-06-28T19:00Z",3:"2026-06-29T17:00Z",1:"2026-06-29T20:30Z",
+    2:"2026-06-30T01:00Z",5:"2026-06-30T17:00Z",4:"2026-06-30T21:00Z",
+    6:"2026-07-01T01:00Z",7:"2026-07-01T16:00Z",9:"2026-07-01T20:00Z",
+    8:"2026-07-02T00:00Z",11:"2026-07-02T19:00Z",10:"2026-07-02T23:00Z",
+    12:"2026-07-03T03:00Z",15:"2026-07-03T18:00Z",13:"2026-07-03T22:00Z",
+    14:"2026-07-04T01:30Z",
+  },
+  r16:{
+    1:"2026-07-04T17:00Z",0:"2026-07-04T21:00Z",2:"2026-07-05T20:00Z",
+    3:"2026-07-06T00:00Z",4:"2026-07-06T19:00Z",5:"2026-07-07T00:00Z",
+    6:"2026-07-07T16:00Z",7:"2026-07-07T20:00Z",
+  },
+  qf:{0:"2026-07-09T19:00Z",1:"2026-07-09T23:00Z",2:"2026-07-10T23:00Z",3:"2026-07-11T23:00Z"},
+  sf:{0:"2026-07-14T23:00Z",1:"2026-07-15T23:00Z"},
+  f3:{0:"2026-07-18T19:00Z"},
+  final:{0:"2026-07-19T19:00Z"}
+};
 
 // ── Central tiebreaker: pts → group pts → exactos → submittedAt (earlier = better) ──
 function tiebreakScore(pid){
@@ -4492,18 +4555,22 @@ function _matchPts(pred,ah,aa){
 
 // Run Monte Carlo simulation for a league (async, updates DOM)
 // Team strength ratings for KO simulation (calibrated from Betfair/DraftKings Jun 2026)
+// Team strength ratings calibrated from FanDuel/DraftKings championship odds (jun 24 2026)
+// Francia +360 > España +500 > Inglaterra +600 > Argentina +650 > Portugal +1000 > Brasil+Alemania +1300 ...
 const TEAM_STR={
-  'Brasil':93,'España':92,'Francia':91,'Argentina':91,'Inglaterra':88,
-  'Alemania':87,'Portugal':86,'Países Bajos':85,'Bélgica':83,'Uruguay':82,
-  'Colombia':81,'México':82,'EE.UU.':79,'Canadá':78,'Suiza':77,
-  'Dinamarca':76,'Japón':75,'Corea del Sur':73,'Noruega':73,'Chile':72,
-  'Ecuador':71,'Turquía':71,'Marruecos':70,'Croacia':69,'Australia':68,
-  'Chequia':68,'Senegal':67,'Serbia':67,'Escocia':68,'Irán':66,
-  'Suecia':66,'Nigeria':65,'Albania':65,'Paraguay':65,'Bosnia-Herz.':65,
-  'C. de Marfil':68,'Túnez':63,'Egipto':64,'Arabia Saudita':63,
-  'Islandia':63,'Perú':62,'Venezuela':62,'Panamá':60,'Nueva Zelanda':60,
-  'Sudáfrica':60,'Uzbekistán':58,'Angola':55,'Cabo Verde':58,'Qatar':55,
-  'Haití':52,'Curazao':50
+  'Francia':100,'España':88,'Inglaterra':84,'Argentina':82,
+  'Portugal':75,'Alemania':74,'Brasil':72,
+  'Países Bajos':68,'EE.UU.':57,'Noruega':55,'Colombia':55,
+  'Marruecos':54,'Japón':52,'México':51,'Bélgica':50,
+  'Uruguay':50,'Suiza':43,'Canadá':43,
+  'Australia':42,'Turquía':42,'Escocia':42,'Chequia':42,
+  'Suecia':41,'Croacia':41,'C. de Marfil':40,
+  'Corea del Sur':39,'Ecuador':38,'Argelia':38,'Senegal':38,
+  'Bosnia-Herz.':38,'Paraguay':38,'Austria':37,
+  'Egipto':37,'Túnez':36,'Irán':36,'Ghana':36,
+  'Arabia Saudita':33,'Sudáfrica':33,'Nueva Zelanda':33,'Irak':32,
+  'Jordania':30,'Qatar':30,'R.D. Congo':35,'Cabo Verde':35,
+  'Uzbekistán':31,'Haití':28,'Curazao':28
 };
 
 // Simulate a KO match (no draws — extra time/penalties included)
