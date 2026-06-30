@@ -2538,9 +2538,6 @@ function hoyTab(pid,pred){
         else if(rnd==="final"&&B2?.final){teamH=B2.final.h;teamA=B2.final.a;}
         else if(rnd==="f3"&&B2?.f3){teamH=B2.f3.h;teamA=B2.f3.a;}
       }catch(e){}
-      const userPick=(pred.ko||{})[rnd]&&(pred.ko||{})[rnd][+idx];
-      const isCorrect=actual&&userPick&&actual===userPick;
-      const isWrong=actual&&userPick&&actual!==userPick;
       koRows+=`<div style="background:rgba(136,170,255,.04);border:1px solid rgba(136,170,255,.15);border-radius:10px;padding:.65rem .8rem;margin-bottom:.45rem">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
           <span style="font-size:.6rem;font-weight:700;letter-spacing:1px;color:#88aaff">${rndLabel[rnd]||rnd.toUpperCase()} · +${rndPts[rnd]||0}</span>
@@ -2552,7 +2549,6 @@ function hoyTab(pid,pred){
           <span>${teamA?teamA+" "+f(teamA):"TBD"}</span>
         </div>
         ${actual?`<div style="text-align:center;font-size:.7rem;color:#ffc800;margin-bottom:.25rem">✅ Avanza: ${f(actual)} ${actual}</div>`:""}
-        ${userPick?`<div style="text-align:center;font-size:.68rem;color:${isCorrect?"#4de0a0":isWrong?"#ff8080":"#889"}">Tu pick: ${f(userPick)} ${userPick}${isCorrect?" ✓ +"+rndPts[rnd]+" pts":isWrong?" ✗":""}</div>`:'<div style="text-align:center;font-size:.65rem;color:#445">Sin predicción para esta ronda</div>'}
       </div>`;
     });
   });
@@ -2601,6 +2597,105 @@ function pgPaymentWall(p){
     </button>
   </div>
   <style>@keyframes bounce{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-14px) rotate(3deg)}}</style>`;
+}
+
+function koPicksListHTML(pred){
+  const _aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+  const _en=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+  const rounds2=[
+    {key:"r32",label:"16vos de Final",pts:10,total:16,enKey:"r32"},
+    {key:"r16",label:"Octavos de Final",pts:15,total:8,enKey:"r16"},
+    {key:"qf", label:"Cuartos de Final",pts:20,total:4,enKey:"qf"},
+    {key:"sf", label:"Semifinal",       pts:30,total:2,enKey:"sf"},
+  ];
+  const activeR=rounds2.filter(r=>_en[r.enKey]&&Object.keys(_aKO[r.key]||{}).length>0);
+
+  let html=activeR.map(r=>{
+    const actSet=new Set(Object.values(_aKO[r.key]||{}).filter(Boolean));
+    const decided=Object.keys(_aKO[r.key]||{}).length;
+
+    // Build set of eliminated teams (losers of decided matches)
+    const eliminatedSet=new Set();
+    try{
+      const ab=buildBracket(STATE.actuals||{},{});
+      const abRound=ab&&ab[r.key];
+      const matchArr=Array.isArray(abRound)?abRound:(abRound?[abRound]:[]);
+      matchArr.forEach(m=>{
+        const winner=(_aKO[r.key]||{})[m.id];
+        if(winner){
+          if(m.h&&m.h!==winner) eliminatedSet.add(m.h);
+          if(m.a&&m.a!==winner) eliminatedSet.add(m.a);
+        }
+      });
+    }catch(e){}
+
+    const userPicks=[...new Set(Object.values((pred.ko||{})[r.key]||{}).filter(Boolean))];
+    if(!userPicks.length) return "";
+
+    let correct=0;
+    const rows=userPicks.map(team=>{
+      const ok=actSet.has(team);
+      if(ok) correct++;
+      const gone=!ok&&eliminatedSet.has(team);
+      const col=ok?"#4de0a0":gone?"#ff8080":"#889";
+      const icon=ok?"✓":gone?"✗":"⏳";
+      const pts=ok?"+"+r.pts:"";
+      return `<div style="display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px;background:${ok?"rgba(77,224,160,.06)":gone?"rgba(255,128,128,.06)":"rgba(255,255,255,.02)"};border:1px solid ${ok?"rgba(77,224,160,.15)":gone?"rgba(255,128,128,.12)":"rgba(255,255,255,.05)"}">
+        <span style="font-size:.9rem">${f(team)}</span>
+        <span style="font-size:.72rem;font-weight:600;color:#ddd;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${team}</span>
+        <span style="font-size:.65rem;font-weight:700;color:${col};min-width:16px;text-align:center">${icon}</span>
+        ${pts?`<span style="font-size:.62rem;color:#4de0a0;font-weight:700">${pts}</span>`:""}
+      </div>`;
+    }).join("");
+
+    return `<div style="margin-top:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(136,170,255,.07)">
+        <span style="font-size:.62rem;font-weight:700;color:#88aaff;letter-spacing:.5px">${r.label.toUpperCase()}</span>
+        <span style="font-size:.62rem;color:#889">${correct} aciertos · +${correct*r.pts} pts · ${decided}/${r.total} jugados</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 8px">
+        ${rows}
+      </div>
+    </div>`;
+  }).join("");
+
+  // ── Final round: Champion / Runner-up / 3rd place ──
+  if(_en.sf){
+    const aSF=_aKO.sf||{},aFinal=_aKO.final||{},aF3=_aKO.f3||{};
+    const pSF=(pred.ko||{}).sf||{},pFinal=(pred.ko||{}).final||{},pF3=(pred.ko||{}).f3||{};
+    const pChamp=pFinal[0],pF3pick=pF3[0];
+    const actualFinalists=[aSF[0],aSF[1]].filter(Boolean);
+    const actualRU=(aFinal[0]&&actualFinalists.length>=2)?(actualFinalists[0]===aFinal[0]?actualFinalists[1]:actualFinalists[0]):null;
+    const pRU=pFinal[0]?(pSF[0]&&pSF[0]!==pFinal[0]?pSF[0]:pSF[1]&&pSF[1]!==pFinal[0]?pSF[1]:null):null;
+
+    const finalRows=[];
+    if(pChamp) finalRows.push({label:"🏆 Campeón",team:pChamp,pts:40,ok:aFinal[0]&&pChamp===aFinal[0],known:!!aFinal[0]});
+    if(pRU) finalRows.push({label:"🥈 Subcampeón",team:pRU,pts:30,ok:actualRU&&pRU===actualRU,known:!!actualRU});
+    if(pF3pick) finalRows.push({label:"🥉 3er Lugar",team:pF3pick,pts:20,ok:aF3[0]&&pF3pick===aF3[0],known:!!aF3[0]});
+
+    if(finalRows.length){
+      html+=`<div style="margin-top:8px;background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.15);border-radius:10px;overflow:hidden">
+        <div style="padding:6px 10px;background:rgba(255,200,0,.08)">
+          <span style="font-size:.62rem;font-weight:700;color:#ffc800;letter-spacing:.5px">🏆 PODIO FINAL</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:6px 8px">
+          ${finalRows.map(r=>{
+            const col=r.known?(r.ok?"#4de0a0":"#ff8080"):"#889";
+            const icon=r.known?(r.ok?"✓":"✗"):"⏳";
+            return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;background:${r.known&&r.ok?"rgba(77,224,160,.06)":r.known&&!r.ok?"rgba(255,128,128,.06)":"rgba(255,255,255,.02)"}">
+              <span style="font-size:.65rem;color:#aab;min-width:80px">${r.label}</span>
+              <span style="font-size:.95rem">${f(r.team)}</span>
+              <span style="font-size:.74rem;font-weight:600;color:#ddd;flex:1">${r.team}</span>
+              <span style="font-size:.65rem;font-weight:700;color:${col}">${icon}</span>
+              ${r.known&&r.ok?`<span style="font-size:.62rem;color:#4de0a0;font-weight:700">+${r.pts}</span>`:""}
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }
+  }
+
+  return html || `<div style="text-align:center;padding:1.2rem;color:#667;font-size:.78rem">Aún no hay rondas habilitadas para mostrar picks</div>`;
 }
 
 function pgMyScore(pid){
@@ -2827,68 +2922,8 @@ function pgMyScore(pid){
         </div>`;
       })()}
 
-      ${(()=>{
-        // ── KO picks list: teams per round with ✓/✗/⏳ ──
-        const _aKO=(STATE.actuals&&STATE.actuals._ko)||{};
-        const _en=(STATE.actuals&&STATE.actuals._koEnabled)||{};
-        const rounds2=[
-          {key:"r32",label:"16vos de Final",pts:10,total:16,enKey:"r32"},
-          {key:"r16",label:"Octavos de Final",pts:15,total:8,enKey:"r16"},
-          {key:"qf", label:"Cuartos de Final",pts:20,total:4,enKey:"qf"},
-          {key:"sf", label:"Semifinal",       pts:30,total:2,enKey:"sf"},
-        ];
-        const activeR=rounds2.filter(r=>_en[r.enKey]&&Object.keys(_aKO[r.key]||{}).length>0);
-        if(!activeR.length) return "";
 
-        return activeR.map(r=>{
-          const actSet=new Set(Object.values(_aKO[r.key]||{}).filter(Boolean));
-          const decided=Object.keys(_aKO[r.key]||{}).length;
-
-          // Build set of eliminated teams (losers of decided matches)
-          const eliminatedSet=new Set();
-          try{
-            const ab=buildBracket(STATE.actuals||{},{});
-            const abRound=ab&&ab[r.key];
-            const matchArr=Array.isArray(abRound)?abRound:(abRound?[abRound]:[]);
-            matchArr.forEach(m=>{
-              const winner=(_aKO[r.key]||{})[m.id];
-              if(winner){
-                if(m.h&&m.h!==winner) eliminatedSet.add(m.h);
-                if(m.a&&m.a!==winner) eliminatedSet.add(m.a);
-              }
-            });
-          }catch(e){}
-
-          const userPicks=[...new Set(Object.values((pred.ko||{})[r.key]||{}).filter(Boolean))];
-          if(!userPicks.length) return "";
-
-          let correct=0;
-          const rows=userPicks.map(team=>{
-            const ok=actSet.has(team);
-            if(ok) correct++;
-            const gone=!ok&&eliminatedSet.has(team);
-            const col=ok?"#4de0a0":gone?"#ff8080":"#889";
-            const icon=ok?"✓":gone?"✗":"⏳";
-            const pts=ok?"+"+r.pts:"";
-            return `<div style="display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px;background:${ok?"rgba(77,224,160,.06)":gone?"rgba(255,128,128,.06)":"rgba(255,255,255,.02)"};border:1px solid ${ok?"rgba(77,224,160,.15)":gone?"rgba(255,128,128,.12)":"rgba(255,255,255,.05)"}">
-              <span style="font-size:.9rem">${f(team)}</span>
-              <span style="font-size:.72rem;font-weight:600;color:#ddd;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${team}</span>
-              <span style="font-size:.65rem;font-weight:700;color:${col};min-width:16px;text-align:center">${icon}</span>
-              ${pts?`<span style="font-size:.62rem;color:#4de0a0;font-weight:700">${pts}</span>`:""}
-            </div>`;
-          }).join("");
-
-          return `<div style="margin-top:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(136,170,255,.07)">
-              <span style="font-size:.62rem;font-weight:700;color:#88aaff;letter-spacing:.5px">${r.label.toUpperCase()}</span>
-              <span style="font-size:.62rem;color:#889">${correct} aciertos · +${correct*r.pts} pts · ${decided}/${r.total} jugados</span>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 8px">
-              ${rows}
-            </div>
-          </div>`;
-        }).join("");
-      })()}
+      ${koPicksListHTML(pred)}
     </div>${lgStatsHTML}`;
   })():""}
 
@@ -2957,8 +2992,8 @@ function pgMyScore(pid){
             const runner=(ko2.final||{})[1]||(champ&&sf0&&sf1?(champ===sf0?sf1:champ===sf1?sf0:null):null);
             const third=(ko2.f3||{})[0];
             const isMe=m.id===pid;
-            return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"'>"
-              +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":"#eee")+";white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis'>"+m.name+(isMe?" ←":"")+"</td>"
+            return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"' onclick=\"showMemberBracket('"+m.id+"')\" ondblclick=\"\" "+(isMe?"":"class='clickable-row'")+" style='cursor:pointer'>"
+              +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":"#eee")+";white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;text-decoration:underline;text-decoration-color:rgba(255,255,255,.15)'>🔍 "+m.name+(isMe?" ←":"")+"</td>"
               +"<td style='padding:4px'>"+cell(champ,finAc[0],40)+"</td>"
               +"<td style='padding:4px'>"+cell(runner,finAc[1],30)+"</td>"
               +"<td style='padding:4px'>"+cell(third,f3Ac[0],20)+"</td>"
@@ -3031,9 +3066,9 @@ function pgMyScore(pid){
             +"</tr></thead><tbody>"
             +matrix.map((row,i)=>{
               const isMe=row.m.id===pid;
-              return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+"'>"
-                +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":i===0?"#4de0a0":"#eee")+";white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis'>"
-                +(i===0?"🥇 ":isMe?"":"")
+              return "<tr style='border-bottom:1px solid rgba(255,255,255,.04);background:"+(isMe?"rgba(255,200,0,.06)":"none")+";cursor:pointer' onclick=\"showMemberBracket('"+row.m.id+"')\">"
+                +"<td style='padding:5px 8px;font-size:.7rem;font-weight:"+(isMe?700:400)+";color:"+(isMe?"#ffc800":i===0?"#4de0a0":"#eee")+";white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;text-decoration:underline;text-decoration-color:rgba(255,255,255,.15)'>"
+                +(i===0?"🥇 ":"🔍 ")
                 +row.m.name+(isMe?" ←":"")+"</td>"
                 +row.scores.map(s=>cellKO(s.hit,s.total)).join("")
                 +"<td style='text-align:center;padding:4px 6px;font-size:.82rem;font-weight:800;color:"+(isMe?"#ffc800":i===0?"#4de0a0":"#aab")+"'>"+row.tot+"</td>"
@@ -4444,6 +4479,25 @@ function bindEvents(){
 function showHelp(){const m=document.getElementById("help-modal");if(m)m.style.display="block";}
 function hideHelp(){const m=document.getElementById("help-modal");if(m)m.style.display="none";}
 
+function showMemberBracket(mid){
+  const p=STATE.participants.find(x=>x.id===mid);
+  const pred=STATE.predictions[mid]||{};
+  if(!p||!pred.groups){showFlash("Este participante no tiene predicciones");return;}
+  const m=document.getElementById("member-bracket-modal");
+  const body=document.getElementById("member-bracket-body");
+  if(!m||!body)return;
+  body.innerHTML=`<div style="padding:.7rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;background:#0b1526;position:sticky;top:0;z-index:1">
+    <div>
+      <div style="font-weight:700;font-size:.95rem;color:#ffc800">${p.name}</div>
+      <div style="font-size:.68rem;color:#889">Picks de eliminatoria · ${scoreFull(mid)} pts totales</div>
+    </div>
+    <button onclick="hideMemberBracket()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;width:auto;padding:0;line-height:1">×</button>
+  </div>
+  <div style="padding:.7rem;max-height:75vh;overflow-y:auto">${koPicksListHTML(pred)}</div>`;
+  m.style.display="block";
+}
+function hideMemberBracket(){const m=document.getElementById("member-bracket-modal");if(m)m.style.display="none";}
+
 function scoringHelpHTML(){
   return `<div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;overflow-y:auto;padding:1rem" onclick="if(event.target===this)hideHelp()">
     <div style="background:#1a2236;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:500px;margin:0 auto;overflow:hidden">
@@ -4493,6 +4547,11 @@ function scoringHelpHTML(){
       <div style="padding:.7rem 1rem;border-top:1px solid rgba(255,255,255,.08)">
         <button onclick="hideHelp()" class="btn-green" style="margin:0">Entendido ✓</button>
       </div>
+    </div>
+  </div>
+  <div id="member-bracket-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;overflow-y:auto;padding:1rem" onclick="if(event.target===this)hideMemberBracket()">
+    <div style="background:#1a2236;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:560px;margin:0 auto;overflow:hidden">
+      <div id="member-bracket-body"></div>
     </div>
   </div>`;
 }
