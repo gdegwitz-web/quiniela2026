@@ -1659,8 +1659,8 @@ function bracketSVG(pid,pred,actualKO){
     const hitA=actualWinner&&a&&actualWinner===a;
     const missH=actualWinner&&h&&actualWinner!==h&&isWin_h; // picked h but wrong
     const missA=actualWinner&&a&&actualWinner!==a&&isWin_a;
-    const hCls=h?(hitH?"win actual-win":(isWin_h&&!actualWinner?"win":"")):"tbd";
-    const aCls=a?(hitA?"win actual-win":(isWin_a&&!actualWinner?"win":"")):"tbd";
+    const hCls=h?(isWin_h?"win":""):"tbd";
+    const aCls=a?(isWin_a?"win":""):"tbd";
     const hTxt=h?trunc(h,9):"TBD";
     const aTxt=a?trunc(a,9):"TBD";
     const clickH=(!readonly&&h)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${h}')`:`pickBracket('${pid}','${rid}',${mid},'${h}')`}"`:""
