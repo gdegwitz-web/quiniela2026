@@ -1652,7 +1652,7 @@ function bracketSVG(pid,pred,actualKO){
   });
 
   // Draw a match box
-  function drawMatch(rid,mid,x,y,h,a,winner,hLbl,aLbl,actualWinner,pts){
+  function drawMatch(rid,mid,x,y,h,a,winner,hLbl,aLbl,actualWinner,pts,earnedSet,earnedPts){
     const isWin_h=winner===h&&h;
     const isWin_a=winner===a&&a;
     const hitH=actualWinner&&h&&actualWinner===h; // actual result confirms h
@@ -1665,13 +1665,17 @@ function bracketSVG(pid,pred,actualKO){
     const aTxt=a?trunc(a,9):"TBD";
     const clickH=(!readonly&&h)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${h}')`:`pickBracket('${pid}','${rid}',${mid},'${h}')`}"`:""
     const clickA=(!readonly&&a)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${a}')`:`pickBracket('${pid}','${rid}',${mid},'${a}')`}"`:""
-    const ptsLabel=(pts&&readonly)? // only show pts label in view mode
-      (hitH&&isWin_h?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${pts}</text>`:"")
-      +((hitA&&isWin_a)?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${pts}</text>`:"")
-      +(missH?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
+    // ✗ badge: wrong pick shown in the origin round where team lost
+    const wrongLabel=readonly?(
+      (missH?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
       +(missA?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
-      :"";
-    // +8 badges for correctly predicted R32 qualifiers
+    ):"";
+    // +pts badge: shown in the DESTINATION round box (teams that earned pts for being HERE)
+    const earnedLabel=(earnedSet&&readonly&&earnedPts)?(
+      (h&&earnedSet.has(h)?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${earnedPts}</text>`:"")
+      +(a&&earnedSet.has(a)?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${earnedPts}</text>`:"")
+    ):"";
+    // +8 badges for correctly predicted R32 qualifiers (teams in R32 = destination from groups)
     const adv8=(readonly&&rid==="r32"&&actualR32teams.size>0);
     const adv8Label=adv8?(
       (h&&actualR32teams.has(h)?`<text x="${x+2}" y="${y+TH/2+4}" font-size="6" text-anchor="start" fill="#ffd580" font-weight="bold">+8</text>`:"")
@@ -1700,7 +1704,7 @@ function bracketSVG(pid,pred,actualKO){
     // divider
     s+=`<line x1="${x+1}" y1="${y+TH+1}" x2="${x+TW-1}" y2="${y+TH+1}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
     // points badges
-    s+=ptsLabel+adv8Label;
+    s+=wrongLabel+earnedLabel+adv8Label;
     return s;
   }
 
@@ -1774,15 +1778,31 @@ function bracketSVG(pid,pred,actualKO){
   // Points per round for view mode badges
   const roundPts={r32:10,r16:15,qf:20,sf:30,final:40,f3:20};
 
+  // Teams user correctly predicted per round (team-based) — shown in DESTINATION box
+  function mkEarned(actualRound,userPickRound){
+    const actSet=new Set(Object.values(actualRound||{}).filter(Boolean));
+    const pkSet=new Set(Object.values(userPickRound||{}).filter(Boolean));
+    const out=new Set();actSet.forEach(t=>{if(pkSet.has(t))out.add(t);});return out;
+  }
+  const koP=(!isAdmin&&pred)?(pred.ko||{}):{};
+  const earnedR32=mkEarned(aKO.r32,koP.r32); // shown in R16 box (+10)
+  const earnedR16=mkEarned(aKO.r16,koP.r16); // shown in QF box  (+15)
+  const earnedQF =mkEarned(aKO.qf, koP.qf);  // shown in SF box  (+20)
+  const earnedSF =mkEarned(aKO.sf, koP.sf);  // shown in Final   (+30)
+
+  // earnedSet/earnedPts for each round's DESTINATION display
+  const destEarned={r16:[earnedR32,10],qf:[earnedR16,15],sf:[earnedQF,20]};
+
   function renderSide(data){
     data.forEach(({rid,matches,winners,n,col})=>{
       const x=cxs[col];
       const actualRound=aKO[rid]||{};
+      const [dSet,dPts]=destEarned[rid]||[null,0];
       matches.forEach((m,i)=>{
         const y=matchY(col,i,n);
         const w=winners[m.id]||null;
         const actualW=actualRound[m.id]||null;
-        svg+=drawMatch(rid,m.id,x,y,m.h,m.a,w,m.hLbl||"",m.aLbl||"",actualW,roundPts[rid]);
+        svg+=drawMatch(rid,m.id,x,y,m.h,m.a,w,m.hLbl||"",m.aLbl||"",actualW,roundPts[rid],dSet,dPts);
       });
     });
   }
@@ -1824,11 +1844,11 @@ function bracketSVG(pid,pred,actualKO){
 
   // Final label
   svg+=`<text class="br-rlbl" x="${centerX+TW/2}" y="${finY-6}" text-anchor="middle" fill="#ffc800">⚽ FINAL</text>`;
-  svg+=drawMatch("final",0,centerX,finY,finW,finA,finWin,"","",aKO.final?aKO.final[0]:null,40);
+  svg+=drawMatch("final",0,centerX,finY,finW,finA,finWin,"","",aKO.final?aKO.final[0]:null,40,earnedSF,30);
 
   // 3rd place label
   svg+=`<text class="br-rlbl" x="${centerX+TW/2}" y="${f3Y-6}" text-anchor="middle" fill="#cd7f32">🥉 3ER LUGAR</text>`;
-  svg+=drawMatch("f3",0,centerX,f3Y,f3W,f3A,f3Win,"","",aKO.f3?aKO.f3[0]:null,20);
+  svg+=drawMatch("f3",0,centerX,f3Y,f3W,f3A,f3Win,"","",aKO.f3?aKO.f3[0]:null,20,null,0);
 
   // Champion banner
   if(B.champion){
@@ -2811,6 +2831,69 @@ function pgMyScore(pid){
           </div>
         </div>`;
       })()}
+
+      ${(()=>{
+        // ── KO picks list: teams per round with ✓/✗/⏳ ──
+        const _aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+        const _en=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+        const rounds2=[
+          {key:"r32",label:"16vos de Final",pts:10,total:16,enKey:"r32"},
+          {key:"r16",label:"Octavos de Final",pts:15,total:8,enKey:"r16"},
+          {key:"qf", label:"Cuartos de Final",pts:20,total:4,enKey:"qf"},
+          {key:"sf", label:"Semifinal",       pts:30,total:2,enKey:"sf"},
+        ];
+        const activeR=rounds2.filter(r=>_en[r.enKey]&&Object.keys(_aKO[r.key]||{}).length>0);
+        if(!activeR.length) return "";
+
+        return activeR.map(r=>{
+          const actSet=new Set(Object.values(_aKO[r.key]||{}).filter(Boolean));
+          const decided=Object.keys(_aKO[r.key]||{}).length;
+
+          // Build set of eliminated teams (losers of decided matches)
+          const eliminatedSet=new Set();
+          try{
+            const ab=buildBracket(STATE.actuals||{},{});
+            const abRound=ab&&ab[r.key];
+            const matchArr=Array.isArray(abRound)?abRound:(abRound?[abRound]:[]);
+            matchArr.forEach(m=>{
+              const winner=(_aKO[r.key]||{})[m.id];
+              if(winner){
+                if(m.h&&m.h!==winner) eliminatedSet.add(m.h);
+                if(m.a&&m.a!==winner) eliminatedSet.add(m.a);
+              }
+            });
+          }catch(e){}
+
+          const userPicks=[...new Set(Object.values((pred.ko||{})[r.key]||{}).filter(Boolean))];
+          if(!userPicks.length) return "";
+
+          let correct=0;
+          const rows=userPicks.map(team=>{
+            const ok=actSet.has(team);
+            if(ok) correct++;
+            const gone=!ok&&eliminatedSet.has(team);
+            const col=ok?"#4de0a0":gone?"#ff8080":"#889";
+            const icon=ok?"✓":gone?"✗":"⏳";
+            const pts=ok?"+"+r.pts:"";
+            return `<div style="display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px;background:${ok?"rgba(77,224,160,.06)":gone?"rgba(255,128,128,.06)":"rgba(255,255,255,.02)"};border:1px solid ${ok?"rgba(77,224,160,.15)":gone?"rgba(255,128,128,.12)":"rgba(255,255,255,.05)"}">
+              <span style="font-size:.9rem">${f(team)}</span>
+              <span style="font-size:.72rem;font-weight:600;color:#ddd;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${team}</span>
+              <span style="font-size:.65rem;font-weight:700;color:${col};min-width:16px;text-align:center">${icon}</span>
+              ${pts?`<span style="font-size:.62rem;color:#4de0a0;font-weight:700">${pts}</span>`:""}
+            </div>`;
+          }).join("");
+
+          return `<div style="margin-top:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(136,170,255,.07)">
+              <span style="font-size:.62rem;font-weight:700;color:#88aaff;letter-spacing:.5px">${r.label.toUpperCase()}</span>
+              <span style="font-size:.62rem;color:#889">${correct} aciertos · +${correct*r.pts} pts · ${decided}/${r.total} jugados</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 8px">
+              ${rows}
+            </div>
+          </div>`;
+        }).join("");
+      })()}
     </div>${lgStatsHTML}`;
   })():""}
 
@@ -2982,10 +3065,10 @@ function pgMyScore(pid){
         const r16EK=Object.keys(aKO2.r16||{}).length;
         const qfEK =Object.keys(aKO2.qf||{}).length;
         const sfEK =Object.keys(aKO2.sf||{}).length;
-        const canR32K=grpsDoneKO&&!!enabled2b.r32;
-        const canR16K=canR32K&&r32EK>=16&&!!enabled2b.r16;
-        const canQFK =canR16K&&r16EK>=8 &&!!enabled2b.qf;
-        const canFinK=canQFK &&qfEK>=4&&sfEK>=2&&!!enabled2b.sf;
+        const canR32K=!!enabled2b.r32;
+        const canR16K=canR32K&&!!enabled2b.r16;
+        const canQFK =canR16K&&!!enabled2b.qf;
+        const canFinK=canQFK &&!!enabled2b.sf;
         const safeAKO={
           r32:canR32K?aKO2.r32||{}:{},
           r16:canR16K?aKO2.r16||{}:{},
