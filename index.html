@@ -1659,23 +1659,18 @@ function bracketSVG(pid,pred,actualKO){
     const hitA=actualWinner&&a&&actualWinner===a;
     const missH=actualWinner&&h&&actualWinner!==h&&isWin_h; // picked h but wrong
     const missA=actualWinner&&a&&actualWinner!==a&&isWin_a;
-    const hCls=h?(hitH?"win actual-win":isWin_h?"win":""):("tbd");
-    const aCls=a?(hitA?"win actual-win":isWin_a?"win":""):("tbd");
+    const hCls=h?(hitH?"win actual-win":(isWin_h&&!actualWinner?"win":"")):"tbd";
+    const aCls=a?(hitA?"win actual-win":(isWin_a&&!actualWinner?"win":"")):"tbd";
     const hTxt=h?trunc(h,9):"TBD";
     const aTxt=a?trunc(a,9):"TBD";
     const clickH=(!readonly&&h)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${h}')`:`pickBracket('${pid}','${rid}',${mid},'${h}')`}"`:""
     const clickA=(!readonly&&a)?`onclick="${isAdmin?`pickAdminKO('${rid}',${mid},'${a}')`:`pickBracket('${pid}','${rid}',${mid},'${a}')`}"`:""
-    // ✗ badge: wrong pick shown in the origin round where team lost
-    const wrongLabel=readonly?(
-      (missH?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
-      +(missA?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="rgba(255,80,80,.7)">✗</text>`:"")
-    ):"";
     // +pts badge: shown in the DESTINATION round box (teams that earned pts for being HERE)
     const earnedLabel=(earnedSet&&readonly&&earnedPts)?(
       (h&&earnedSet.has(h)?`<text x="${x+TW-3}" y="${y+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${earnedPts}</text>`:"")
       +(a&&earnedSet.has(a)?`<text x="${x+TW-3}" y="${y+TH+2+TH/2+4}" font-size="6.5" text-anchor="end" fill="#4de0a0" font-weight="bold">+${earnedPts}</text>`:"")
     ):"";
-    // +8 badges for correctly predicted R32 qualifiers (teams in R32 = destination from groups)
+    const wrongLabel="";    // +8 badges for correctly predicted R32 qualifiers (teams in R32 = destination from groups)
     const adv8=(readonly&&rid==="r32"&&actualR32teams.size>0);
     const adv8Label=adv8?(
       (h&&actualR32teams.has(h)?`<text x="${x+2}" y="${y+TH/2+4}" font-size="6" text-anchor="start" fill="#ffd580" font-weight="bold">+8</text>`:"")
