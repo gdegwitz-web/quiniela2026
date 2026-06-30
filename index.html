@@ -1001,19 +1001,19 @@ function scoreKO(pred){
     const canScoreQF = canScoreR16 && !!enabled.qf;
     const canScoreFin= canScoreQF  && !!enabled.sf;
 
-    // R32 → +10 per team correctly predicted to advance (any slot match)
+    // R32 → +10 per team correctly predicted to advance (team-based: any slot in user's own bracket)
     if(canScoreR32){
       const actualTeams=new Set(Object.values(aKO.r32||{}).filter(Boolean));
       const pickedTeams=new Set(Object.values(ko.r32||{}).filter(Boolean));
       actualTeams.forEach(team=>{if(pickedTeams.has(team))p+=10;});
     }
-    // R16 → +15 per team correctly predicted to advance (any slot match)
+    // R16 → +15 per team correctly predicted to advance (team-based)
     if(canScoreR16){
       const actualTeams=new Set(Object.values(aKO.r16||{}).filter(Boolean));
       const pickedTeams=new Set(Object.values(ko.r16||{}).filter(Boolean));
       actualTeams.forEach(team=>{if(pickedTeams.has(team))p+=15;});
     }
-    // QF → +20 per team correctly predicted to advance (any slot match)
+    // QF → +20 per team correctly predicted to advance (team-based)
     if(canScoreQF){
       const actualTeams=new Set(Object.values(aKO.qf||{}).filter(Boolean));
       const pickedTeams=new Set(Object.values(ko.qf||{}).filter(Boolean));
@@ -1086,7 +1086,6 @@ function scoreKODetail(pred){
         const aTeam=actual[idx];
         if(!aTeam) return;
         const ok=pickedTeams.has(aTeam);
-        // Show the user's pick for this team (whichever slot they put it in)
         rows.push({round:cfg.label,idx,aTeam,pTeam:ok?aTeam:"—",pts:ok?cfg.pts:0,ok});
       });
     });
@@ -2601,7 +2600,8 @@ function pgMyScore(pid){
   if(!pred.ko) pred.ko={};
   const gPts=scoreGroups(pred.groups||{},STATE.actuals);
   const qn=pred.quinName||"Mi Quiniela";
-  const tab=ROUTE.subtab||"hoy";
+  const hoyTabEnabled=(STATE.actuals&&STATE.actuals._hoyEnabled)!==false;
+  const tab=ROUTE.subtab||(hoyTabEnabled?"hoy":"score");
   const grp=ROUTE.grp||"A";
 
   const myLeagues=STATE.leagues.filter(l=>l.memberIds&&l.memberIds.includes(pid));
@@ -2620,14 +2620,14 @@ function pgMyScore(pid){
     <button class="btn-gray" style="width:auto;padding:.28rem .65rem;font-size:.72rem" onclick="logout()">SALIR</button>
   </div>
   <div class="tabs" style="white-space:nowrap">
-    <button class="tab${tab==="hoy"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'hoy'})" style="font-size:.62rem;padding:5px 2px">📅<br><span style="font-size:.55rem">HOY</span></button>
+    ${hoyTabEnabled?`<button class="tab${tab==="hoy"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'hoy'})" style="font-size:.62rem;padding:5px 2px">📅<br><span style="font-size:.55rem">HOY</span></button>`:''}
     <button class="tab${tab==="score"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'score'})" style="font-size:.62rem;padding:5px 2px">🏆<br><span style="font-size:.55rem">PUNTAJE</span></button>
     <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})" style="font-size:.62rem;padding:5px 2px">📋<br><span style="font-size:.55rem">PRED.</span></button>
     <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})" style="font-size:.62rem;padding:5px 2px">🏅<br><span style="font-size:.55rem">LIGAS</span></button>
     ${hasStatsLeague?`<button class="tab${tab==="stats"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'stats'})" style="font-size:.62rem;padding:5px 2px">📊<br><span style="font-size:.55rem">STATS</span></button>`:''}
     ${hasProbLeague?`<button class="tab${tab==="prob"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'prob'})" style="font-size:.62rem;padding:5px 2px">🎲<br><span style="font-size:.55rem">PROB.</span></button>`:''}
   </div>
-  ${tab==="hoy"?hoyTab(pid,pred):""}
+  ${tab==="hoy"&&hoyTabEnabled?hoyTab(pid,pred):""}
   ${tab==="score"?(()=>{
     // ── COMPUTE STATS BEFORE TEMPLATE ──
     let lgStatsHTML="";
@@ -2791,7 +2791,6 @@ function pgMyScore(pid){
           const pkT=new Set(Object.values((pred.ko||{}).sf||{}).filter(Boolean));
           let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
           rounds.push({label:"Final",hit,total:dec||2,color:"#88aaff",enabled:dec>0});
-          // Campeón
           const pC=((pred.ko||{}).final||{})[0],aC=aKO2.final?.[0];
           if(aC) rounds.push({label:"Campeón",hit:pC===aC?1:0,total:1,color:pC===aC?"#ffd700":"#88aaff",enabled:true});
         }
@@ -3471,6 +3470,15 @@ function pgAdmin(tab){
   </div>
   ${tab==="results"?`<div class="card">
     <h2>CARGAR RESULTADOS</h2>
+    <div style="margin-bottom:.7rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${(()=>{
+        const hoyOn=(STATE.actuals&&STATE.actuals._hoyEnabled)!==false;
+        return `<button onclick="adminToggleHoyTab()"
+          style="padding:5px 10px;border-radius:7px;border:1px solid ${hoyOn?'rgba(0,200,83,.4)':'rgba(255,100,100,.4)'};background:${hoyOn?'rgba(0,200,83,.12)':'rgba(255,100,100,.1)'};color:${hoyOn?'#4de0a0':'#ff8080'};font-size:.7rem;font-weight:700;cursor:pointer">
+          ${hoyOn?'✅':'⏸'} Pestaña HOY ${hoyOn?'habilitada':'deshabilitada'}
+        </button>`;
+      })()}
+    </div>
     <div class="grp-tabs">
       ${Object.keys(GROUPS).map(g=>`<button class="gtab${g===grp?" on":""}" onclick="go('admin',{tab:'results',grp:'${g}'})">${g}</button>`).join("")}
       <button class="gtab${grp==="KO"?" on":""}" onclick="go('admin',{tab:'results',grp:'KO'})" style="background:rgba(255,200,0,.1);color:#ffc800">🏆 KO</button>
@@ -5208,6 +5216,14 @@ function adminToggleKORound(key){
   const label={groupAdv:"Clasificados R32 (+8)",r32:"16vos",r16:"Octavos",qf:"Cuartos",sf:"Semis + Final"}[key];
   showFlash((STATE.actuals._koEnabled[key]?"✅ ":"⏸ ")+(label||key)+" "+(STATE.actuals._koEnabled[key]?"habilitado — ya suma puntos":"deshabilitado"));
   go("admin",{tab:"results",grp:"KO"});
+}
+
+function adminToggleHoyTab(){
+  if(!STATE.actuals) STATE.actuals={};
+  STATE.actuals._hoyEnabled = STATE.actuals._hoyEnabled===false ? true : false;
+  fbWriteActuals();
+  showFlash(STATE.actuals._hoyEnabled!==false?"✅ Pestaña HOY habilitada para usuarios":"⏸ Pestaña HOY deshabilitada para usuarios");
+  go("admin",{tab:"results",grp:ROUTE.grp||"A"});
 }
 
 function adminTogglePaid(pid){
