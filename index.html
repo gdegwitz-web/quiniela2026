@@ -961,7 +961,8 @@ function pickAdminKO(round,matchId,team){
   if(roundEnabled&&pts&&STATE.actuals._ko[round]&&STATE.actuals._ko[round][matchId]===team){
     const winners=STATE.participants.filter(p=>{
       const ko=(STATE.predictions[p.id]||{}).ko||{};
-      return (ko[round]||{})[matchId]===team;
+      const picks=Object.values((ko[round]||{})).filter(Boolean);
+      return picks.includes(team);
     });
     if(winners.length>0)
       showFlash("✓ "+team+" avanza — "+winners.length+" participante"+(winners.length!==1?"s":"")+" gana"+(winners.length!==1?"n":"")+" +"+pts+" pts 🎯");
