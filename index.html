@@ -2603,13 +2603,20 @@ function pgPaymentWall(p){
 function koPicksListHTML(pred){
   const _aKO=(STATE.actuals&&STATE.actuals._ko)||{};
   const _en=(STATE.actuals&&STATE.actuals._koEnabled)||{};
+  const _prevDone={
+    r32: true,                                    // always show when r32 enabled
+    r16: Object.keys(_aKO.r32||{}).length>=16,    // show octavos when all 16vos played
+    qf:  Object.keys(_aKO.r16||{}).length>=8,     // show cuartos when all octavos played
+    sf:  Object.keys(_aKO.qf||{}).length>=4,      // show semis when all cuartos played
+  };
   const rounds2=[
     {key:"r32",label:"16vos de Final",pts:10,total:16,enKey:"r32"},
     {key:"r16",label:"Octavos de Final",pts:15,total:8,enKey:"r16"},
     {key:"qf", label:"Cuartos de Final",pts:20,total:4,enKey:"qf"},
     {key:"sf", label:"Semifinal",       pts:30,total:2,enKey:"sf"},
   ];
-  const activeR=rounds2.filter(r=>_en[r.enKey]&&Object.keys(_aKO[r.key]||{}).length>0);
+  // Show round if: its own button is on, OR the previous round is complete and its button is on
+  const activeR=rounds2.filter(r=>_en[r.enKey]||(_en.r32&&_prevDone[r.key]));
 
   let html=activeR.map(r=>{
     const actSet=new Set(Object.values(_aKO[r.key]||{}).filter(Boolean));
@@ -2874,34 +2881,34 @@ function pgMyScore(pid){
           const actT=new Set(Object.values(aR32).filter(Boolean));
           const pkT=new Set(Object.values((pred.ko||{}).r32||{}).filter(Boolean));
           let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
-          rounds.push({label:"Octavos",hit,total:dec||16,color:"#88aaff",enabled:dec>0});
+          rounds.push({label:"Octavos",hit,total:dec||16,color:"#88aaff",enabled:true});
         }
 
-        // Clasif. Cuartos (8 winners of R16) — team-based
-        if(enabled2.r16){
+        // Clasif. Cuartos (8 winners of R16) — show when r16 enabled OR all 16vos complete
+        if(enabled2.r16||(enabled2.r32&&Object.keys(aKO2.r32||{}).length>=16)){
           const aR16=aKO2.r16||{};const dec=Object.keys(aR16).length;
           const actT=new Set(Object.values(aR16).filter(Boolean));
           const pkT=new Set(Object.values((pred.ko||{}).r16||{}).filter(Boolean));
           let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
-          rounds.push({label:"Cuartos",hit,total:dec||8,color:"#88aaff",enabled:dec>0});
+          rounds.push({label:"Cuartos",hit,total:dec||8,color:"#88aaff",enabled:true});
         }
 
-        // Clasif. Semis (4 winners of QF) — team-based
-        if(enabled2.qf){
+        // Clasif. Semis (4 winners of QF) — show when qf enabled OR all octavos complete
+        if(enabled2.qf||(enabled2.r32&&Object.keys(aKO2.r16||{}).length>=8)){
           const aQF=aKO2.qf||{};const dec=Object.keys(aQF).length;
           const actT=new Set(Object.values(aQF).filter(Boolean));
           const pkT=new Set(Object.values((pred.ko||{}).qf||{}).filter(Boolean));
           let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
-          rounds.push({label:"Semis",hit,total:dec||4,color:"#88aaff",enabled:dec>0});
+          rounds.push({label:"Semis",hit,total:dec||4,color:"#88aaff",enabled:true});
         }
 
-        // Clasif. Final (2 winners of SF) — team-based
-        if(enabled2.sf){
+        // Clasif. Final (2 winners of SF) — show when sf enabled OR all cuartos complete
+        if(enabled2.sf||(enabled2.r32&&Object.keys(aKO2.qf||{}).length>=4)){
           const aSF=aKO2.sf||{};const dec=Object.keys(aSF).length;
           const actT=new Set(Object.values(aSF).filter(Boolean));
           const pkT=new Set(Object.values((pred.ko||{}).sf||{}).filter(Boolean));
           let hit=0;actT.forEach(t=>{if(pkT.has(t))hit++;});
-          rounds.push({label:"Final",hit,total:dec||2,color:"#88aaff",enabled:dec>0});
+          rounds.push({label:"Final",hit,total:dec||2,color:"#88aaff",enabled:true});
           const pC=((pred.ko||{}).final||{})[0],aC=aKO2.final?.[0];
           if(aC) rounds.push({label:"Campeón",hit:pC===aC?1:0,total:1,color:pC===aC?"#ffd700":"#88aaff",enabled:true});
         }
