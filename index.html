@@ -5007,38 +5007,43 @@ function _simFullTournament(){
 }
 
 // Score a participant against one simulated tournament
-function _scoreOneSim(pid,sim,currentPts,playedIds,predR32Teams,pred4th){
+// staticPts = scoreGroups + scoreGroupAdvancement (pre-computed, constant once groups done)
+// Simulation only varies KO outcomes, so we add ALL KO pts fresh each sim run
+function _scoreOneSim(pid,sim,staticPts,predR32Teams,pred4th){
   const pred=STATE.predictions[pid]||{};
   const ko=pred.ko||{};
-  let pts=currentPts;
+  let pts=staticPts;
 
-  // Pending group match pts
-  MATCHES.forEach(m=>{
-    if(playedIds.has(+m.id)) return;
-    const a=sim.simA[m.id];
-    if(a) pts+=_matchPts((pred.groups||{})[m.id],a.h,a.a);
-  });
-
-  // Group advancement: +8 per correctly predicted R32 qualifier
-  predR32Teams.forEach(t=>{ if(t&&sim.r32Teams.has(t)) pts+=8; });
-
-  // KO rounds
+  // R32/R16/QF: team-based (matches scoreKO logic)
   [[sim.simKO.r32,ko.r32,10],[sim.simKO.r16,ko.r16,15],[sim.simKO.qf,ko.qf,20]]
     .forEach(([actual,pick,p])=>{
       if(!actual||!pick) return;
-      Object.keys(actual).forEach(i=>{ if(actual[i]&&pick[String(i)]===actual[i]) pts+=p; });
+      const actTeams=new Set(Object.values(actual).filter(Boolean));
+      const pickTeams=new Set(Object.values(pick).filter(Boolean));
+      actTeams.forEach(t=>{ if(pickTeams.has(t)) pts+=p; });
     });
 
-  // Clasificado a Final: +30 per correct finalist (via SF picks)
+  // Clasificado a Final: +30 per correct finalist (via SF picks, order-independent)
   const fins=[sim.simKO.final[0],sim.simKO.final[1]].filter(Boolean);
   const sfP=ko.sf||{};
   if(sfP[0]&&fins.includes(sfP[0])) pts+=30;
   if(sfP[1]&&fins.includes(sfP[1])) pts+=30;
 
-  // Champion/Runner-up/3rd/4th
+  // Champion +40
   if(sim.simKO.final[0]&&(ko.final||{})[0]===sim.simKO.final[0]) pts+=40;
-  if(sim.simKO.final[1]&&(ko.final||{})[1]===sim.simKO.final[1]) pts+=30;
+
+  // Runner-up +30: derive from SF picks (user never sets ko.final[1] explicitly)
+  const actualRU=sim.simKO.final[1];
+  const userChamp=(ko.final||{})[0];
+  const userRU=userChamp
+    ?(sfP[0]&&sfP[0]!==userChamp?sfP[0]:sfP[1]&&sfP[1]!==userChamp?sfP[1]:null)
+    :null;
+  if(actualRU&&userRU&&userRU===actualRU) pts+=30;
+
+  // 3rd place +20
   if(sim.simKO.f3[0]&&(ko.f3||{})[0]===sim.simKO.f3[0]) pts+=20;
+
+  // 4th place +10
   if(pred4th&&sim.simKO.f3[1]===pred4th) pts+=10;
 
   return pts;
@@ -5059,14 +5064,15 @@ function runProbSimulation(pid,lgId){
   }
 
   // Pre-compute per-participant data (done once, not inside simulation loop)
-  const playedIds=new Set(MATCHES.filter(m=>{const a=(STATE.actuals||{})[m.id];return a&&a.h!==""&&a.a!=="";}).map(m=>+m.id));
+  const actuals=STATE.actuals||{};
 
   const memberData=members.map(p=>{
     const pred=STATE.predictions[p.id]||{};
     const ko=pred.ko||{};
 
-    // Current confirmed score
-    const currentPts=scoreFull(p.id);
+    // Static pts: all group match pts + group advancement (constant once groups done)
+    // Does NOT include KO pts — those are re-simulated every run
+    const staticPts = scoreGroups(pred.groups||{},actuals) + scoreGroupAdvancement(pred);
 
     // Pre-compute predicted R32 teams from their group predictions
     let predR32Teams=new Set();
@@ -5082,7 +5088,7 @@ function runProbSimulation(pid,lgId){
       if(B&&B.f3&&(ko.f3||{})[0]){pred4th=B.f3.h===(ko.f3||{})[0]?B.f3.a:B.f3.h;}
     }catch(e){}
 
-    return{...p,currentPts,predR32Teams,pred4th};
+    return{...p,staticPts,predR32Teams,pred4th};
   });
 
   const rankCounts=members.map(()=>new Array(members.length).fill(0));
@@ -5094,7 +5100,7 @@ function runProbSimulation(pid,lgId){
       const sim=_simFullTournament();
       if(!sim) continue;
       const scores=memberData.map(md=>
-        _scoreOneSim(md.id,sim,md.currentPts,playedIds,md.predR32Teams,md.pred4th)
+        _scoreOneSim(md.id,sim,md.staticPts,md.predR32Teams,md.pred4th)
         +Math.random()*1e-5
       );
       const order=scores.map((sc,i)=>({sc,i})).sort((a,b)=>b.sc-a.sc);
