@@ -2600,6 +2600,146 @@ function pgPaymentWall(p){
   <style>@keyframes bounce{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-14px) rotate(3deg)}}</style>`;
 }
 
+function pgSimulation(pid){
+  const myLeagues=STATE.leagues.filter(l=>l.memberIds&&l.memberIds.includes(pid));
+  if(!myLeagues.length) return `<div style="text-align:center;padding:2rem;color:#667">Únete a una liga para usar la simulación</div>`;
+
+  // Get selected league
+  const selLgId=ROUTE.simLgId||myLeagues[0].id;
+  const selLg=myLeagues.find(l=>l.id===selLgId)||myLeagues[0];
+  const members=selLg.memberIds.map(id=>STATE.participants.find(p=>p.id===id)).filter(p=>p&&!p.hidden);
+
+  // Get remaining alive teams from actual bracket
+  const aKO=(STATE.actuals&&STATE.actuals._ko)||{};
+  let finalTeams=[],f3Teams=[];
+  try{
+    const ab=buildBracket(STATE.actuals||{},aKO);
+    const sfParticipants=[];
+    if(ab.sf) ab.sf.forEach(m=>{if(m.h)sfParticipants.push(m.h);if(m.a)sfParticipants.push(m.a);});
+    const sfWinners=[aKO.sf?.[0],aKO.sf?.[1]].filter(Boolean);
+
+    if(sfParticipants.length>=4){
+      // Both SFs decided — split winners vs losers
+      if(sfWinners.length>=2){
+        finalTeams=[...sfWinners].sort();
+        f3Teams=sfParticipants.filter(t=>!sfWinners.includes(t)).sort();
+      } else {
+        // SFs not yet decided — all 4 available for both groups
+        finalTeams=[...new Set(sfParticipants)].sort();
+        f3Teams=[...finalTeams];
+      }
+    } else if(sfParticipants.length>=2){
+      finalTeams=[...new Set(sfParticipants)].sort();
+      f3Teams=[...finalTeams];
+    } else {
+      // Fallback to QF winners
+      const qfw=Object.values(aKO.qf||{}).filter(Boolean);
+      finalTeams=[...new Set(qfw)].sort();
+      f3Teams=[...finalTeams];
+    }
+  }catch(e){}
+
+  // Get current scenario picks from URL or default
+  const champ  =ROUTE.simChamp  ||"";
+  const ruPos  =ROUTE.simRU     ||"";
+  const third  =ROUTE.simThird  ||"";
+  const fourth =ROUTE.simFourth ||"";
+
+  // If all 4 picked, compute scores
+  let resultHTML="";
+  if(champ&&ruPos&&third&&fourth&&champ!==ruPos&&third!==fourth){
+    const actuals=STATE.actuals||{};
+    const simKO={
+      r32:aKO.r32||{},
+      r16:aKO.r16||{},
+      qf: aKO.qf||{},
+      sf: aKO.sf&&Object.keys(aKO.sf).length>=2?aKO.sf:{0:champ,1:ruPos},
+      final:{0:champ,1:ruPos},
+      f3:{0:third,1:fourth}
+    };
+    const scored=members.map(p=>{
+      const pred=STATE.predictions[p.id]||{};
+      const ko=pred.ko||{};
+      const staticPts=scoreGroups(pred.groups||{},actuals)+scoreGroupAdvancement(pred);
+      let predR32Teams=new Set(),pred4th=null;
+      try{
+        const B=buildBracket(pred.groups||{},ko);
+        if(B?.r32)B.r32.forEach(m=>{if(m.h)predR32Teams.add(m.h);if(m.a)predR32Teams.add(m.a);});
+        if(B?.f3&&(ko.f3||{})[0])pred4th=B.f3.h===(ko.f3||{})[0]?B.f3.a:B.f3.h;
+      }catch(e){}
+      const scenarioPts=_scoreOneSim(p.id,{simKO,simA:actuals,r32Teams:new Set()},staticPts,predR32Teams,pred4th);
+      return{...p,actual:scoreFull(p.id),scenario:scenarioPts};
+    }).sort((a,b)=>b.scenario-a.scenario||(b.actual-a.actual));
+
+    const isMe=r=>r.id===pid;
+    resultHTML=`<div style="margin-top:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden">
+      <div style="padding:7px 12px;background:rgba(255,200,0,.07);font-size:.62rem;font-weight:700;color:#ffc800;letter-spacing:.5px">📊 RANKING EN ESTE ESCENARIO · ${selLg.name}</div>
+      <div style="padding:5px 12px 3px;font-size:.62rem;color:#889">🏆 ${champ} · 🥈 ${ruPos} · 🥉 ${third} · 4️⃣ ${fourth}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)">
+          <th style="padding:5px 6px;text-align:left;font-size:.58rem;color:#667;font-weight:400">JUGADOR</th>
+          <th style="padding:5px 6px;text-align:right;font-size:.58rem;color:#667;font-weight:400">ACTUAL</th>
+          <th style="padding:5px 6px;text-align:right;font-size:.58rem;color:#ffc800;font-weight:600">ESCENARIO</th>
+          <th style="padding:5px 6px;text-align:right;font-size:.58rem;color:#667;font-weight:400">DIFF</th>
+        </tr></thead><tbody>
+        ${scored.map((r,i)=>{
+          const diff=r.scenario-r.actual;
+          const me=isMe(r);
+          const medal=i===0?"🥇 ":i===1?"🥈 ":i===2?"🥉 ":"";
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,.04);background:${me?"rgba(255,200,0,.06)":"none"}">
+            <td style="padding:6px 8px;font-size:.72rem;font-weight:${me?700:400};color:${me?"#ffc800":i===0?"#4de0a0":"#ccc"};white-space:nowrap">${medal}${r.name}${me?" ←":""}</td>
+            <td style="padding:6px;text-align:right;font-size:.7rem;color:#889">${r.actual}</td>
+            <td style="padding:6px;text-align:right;font-size:.78rem;font-weight:700;color:${me?"#ffc800":"#eee"}">${r.scenario}</td>
+            <td style="padding:6px;text-align:right;font-size:.65rem;font-weight:700;color:${diff>0?"#4de0a0":diff<0?"#ff8080":"#667"}">${diff>0?"+"+diff:diff===0?"—":diff}</td>
+          </tr>`;
+        }).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  } else if(champ||ruPos||third||fourth){
+    resultHTML=`<div style="text-align:center;padding:.8rem;color:#667;font-size:.72rem">Selecciona los 4 equipos para ver el ranking</div>`;
+  }
+
+  // Team picker — teamList restricts available options per position group
+  const makeBtn=(pos,label,icon,val,color,teamList)=>{
+    const others=(pos==="simChamp"||pos==="simRU")?[champ,ruPos]:[third,fourth];
+    const opts=teamList.filter(t=>!others.includes(t)||t===val);
+    return `<div style="margin-bottom:8px">
+      <div style="font-size:.62rem;color:${color};font-weight:700;letter-spacing:.5px;margin-bottom:5px">${icon} ${label}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${opts.map(t=>`<button type="button" onclick="go('myscore',{pid:'${pid}',subtab:'sim',simLgId:'${selLg.id}',simChamp:'${pos==="simChamp"?t:champ}',simRU:'${pos==="simRU"?t:ruPos}',simThird:'${pos==="simThird"?t:third}',simFourth:'${pos==="simFourth"?t:fourth}'})" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:20px;border:1px solid ${t===val?"rgba(255,200,0,.8)":"rgba(255,255,255,.15)"};background:${t===val?"rgba(255,200,0,.18)":"rgba(255,255,255,.04)"};font-size:.72rem;font-weight:${t===val?700:400};color:${t===val?"#ffc800":"#ccc"};cursor:pointer;touch-action:manipulation">${f(t)} ${t}</button>`).join("")}
+        ${val?`<button type="button" onclick="go('myscore',{pid:'${pid}',subtab:'sim',simLgId:'${selLg.id}',simChamp:'${pos==="simChamp"?"":champ}',simRU:'${pos==="simRU"?"":ruPos}',simThird:'${pos==="simThird"?"":third}',simFourth:'${pos==="simFourth"?"":fourth}'})" style="padding:5px 9px;border-radius:20px;border:1px solid rgba(255,100,100,.3);background:rgba(255,100,100,.08);font-size:.68rem;color:#ff8080;cursor:pointer;touch-action:manipulation">✕</button>`:""}
+      </div>
+    </div>`;
+  };
+
+  // Liga selector
+  const lgSelector=myLeagues.length>1?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+    ${myLeagues.map(l=>`<button type="button" onclick="go('myscore',{pid:'${pid}',subtab:'sim',simLgId:'${l.id}'})" style="padding:4px 10px;border-radius:12px;border:1px solid ${l.id===selLg.id?"rgba(255,200,0,.6)":"rgba(255,255,255,.15)"};background:${l.id===selLg.id?"rgba(255,200,0,.1)":"rgba(255,255,255,.04)"};font-size:.68rem;color:${l.id===selLg.id?"#ffc800":"#889"};cursor:pointer;touch-action:manipulation">${l.name}</button>`).join("")}
+  </div>`:"";
+
+  return `
+  <div style="font-size:.68rem;letter-spacing:2px;color:#88aaff;font-weight:700;margin:.3rem 0 .7rem">🔮 SIMULADOR DE ESCENARIOS</div>
+  ${lgSelector}
+  <div style="background:rgba(136,170,255,.05);border:1px solid rgba(136,170,255,.12);border-radius:12px;padding:10px 12px;margin-bottom:8px">
+    <div style="font-size:.62rem;color:#889;margin-bottom:10px">Elige el escenario del podio final y ve cómo quedaría el ranking</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.12);border-radius:8px;padding:8px">
+        <div style="font-size:.58rem;color:#ffc800;font-weight:700;letter-spacing:1px;margin-bottom:6px">🏆 FINAL</div>
+        ${makeBtn("simChamp","Campeón","🥇",champ,"#ffc800",finalTeams)}
+        ${makeBtn("simRU","Subcampeón","🥈",ruPos,"#ccc",finalTeams)}
+      </div>
+      <div style="background:rgba(77,224,160,.04);border:1px solid rgba(77,224,160,.12);border-radius:8px;padding:8px">
+        <div style="font-size:.58rem;color:#4de0a0;font-weight:700;letter-spacing:1px;margin-bottom:6px">🥉 3ER LUGAR</div>
+        ${makeBtn("simThird","3er Lugar","🥉",third,"#4de0a0",f3Teams)}
+        ${makeBtn("simFourth","4to Lugar","4️⃣",fourth,"#88aaff",f3Teams)}
+      </div>
+    </div>
+  </div>
+  ${resultHTML}
+  ${scoringHelpHTML()}`;
+}
+
 function koPicksListHTML(pred){
   const _aKO=(STATE.actuals&&STATE.actuals._ko)||{};
   const _en=(STATE.actuals&&STATE.actuals._koEnabled)||{};
@@ -2743,8 +2883,9 @@ function pgMyScore(pid){
     <button class="tab${tab==="predictions"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'predictions',grp:'${grp}'})" style="font-size:.62rem;padding:5px 2px">📋<br><span style="font-size:.55rem">PRED.</span></button>
     <button class="tab${tab==="leagues"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'leagues'})" style="font-size:.62rem;padding:5px 2px">🏅<br><span style="font-size:.55rem">LIGAS</span></button>
     ${hasStatsLeague?`<button class="tab${tab==="stats"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'stats'})" style="font-size:.62rem;padding:5px 2px">📊<br><span style="font-size:.55rem">STATS</span></button>`:''}
-    ${hasProbLeague?`<button class="tab${tab==="prob"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'prob'})" style="font-size:.62rem;padding:5px 2px">🎲<br><span style="font-size:.55rem">PROB.</span></button>`:''}
+    ${myLeagues.length?`<button class="tab${tab==="sim"?" on":""}" onclick="go('myscore',{pid:'${pid}',subtab:'sim'})" style="font-size:.62rem;padding:5px 2px">🔮<br><span style="font-size:.55rem">SIM.</span></button>`:''}
   </div>
+  ${tab==="sim"?pgSimulation(pid):""}
   ${tab==="hoy"&&hoyTabEnabled?hoyTab(pid,pred):""}
   ${tab==="score"?(()=>{
     // ── COMPUTE STATS BEFORE TEMPLATE ──
